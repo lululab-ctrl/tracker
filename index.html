@@ -3106,26 +3106,32 @@ function fillIncomeList() {
     el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">💰</div><p>No income added yet.</p></div>`;
     return;
   }
-  el.innerHTML = DB.budgetIncome.map(i=>{
+  const total = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  el.innerHTML = `
+    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
+      <span>${DB.budgetIncome.length} entr${DB.budgetIncome.length!==1?'ies':'y'}</span>
+      <span style="font-weight:600;color:var(--green)">Total: ₱${fmt(total)}/mo</span>
+    </div>` +
+  DB.budgetIncome.map(i=>{
     const schedLabel = {monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
     let schedDetail = '';
     if(i.paySchedule==='split') {
       schedDetail = `
-        <div style="margin-top:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px;display:inline-flex;gap:10px;align-items:center">
-          <span style="font-size:.62rem;color:var(--text-light)">Day ${i.day1||15}</span>
-          <span style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</span>
+        <div style="margin-top:6px;display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:5px 10px">
+          <span style="font-size:.65rem;color:var(--text-light)">Day ${i.day1||15}</span>
+          <span style="font-size:.82rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</span>
         </div>`;
     }
     return `
-    <div class="card card-sm" style="margin-bottom:8px">
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.label}</div>
-          <div style="font-size:.68rem;color:var(--text-light)">${i.type||'Income'} · ${schedLabel}</div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.type||'Income'}</div>
+          <div style="font-size:.68rem;color:var(--text-light)">${schedLabel}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">₱${fmt(i.amount)}</div>
-          <div style="font-size:.62rem;color:var(--text-light)">/month total</div>
+          <div style="font-size:.62rem;color:var(--text-light)">/month</div>
         </div>
       </div>
       ${schedDetail}
