@@ -546,6 +546,18 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield}
 // ══════════════════════════════════════════════
 // HELPERS (must be defined before DB init)
 // ══════════════════════════════════════════════
+// Instantly hide splash on reload to prevent flash
+(function(){
+  try {
+    const isReload = (performance && performance.navigation && performance.navigation.type === 1)
+      || (performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0]?.type === 'reload');
+    const hasSession = !!sessionStorage.getItem('lulu_last');
+    if(isReload && hasSession) {
+      const s = document.getElementById('splash');
+      if(s) s.style.display = 'none';
+    }
+  } catch(e){}
+})();
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function td() { return new Date().toISOString().slice(0,10); }
 function fv(id) { const e=document.getElementById(id); return e?e.value.trim():''; }
@@ -3711,19 +3723,24 @@ function restorePage() {
     const page = sessionStorage.getItem('lulu_page');
     const now = Date.now();
 
-    // If inactive for more than 10 min OR no session, show splash
-    if(!page || !lastActivity || (now - lastActivity) > IDLE_MS) {
+    // Detect if this is a page refresh (F5) vs a fresh open
+    // performance.navigation.type === 1 means reload; sessionStorage also persists through reload
+    const isReload = (performance && performance.navigation && performance.navigation.type === 1)
+      || (performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0]?.type === 'reload');
+
+    // Fresh open (new tab / link opened): no session OR idle timed out
+    const idledOut = lastActivity && (now - lastActivity) > IDLE_MS;
+    const freshOpen = !lastActivity && !isReload;
+
+    if(freshOpen || idledOut || (!page && !isReload)) {
       go('dashboard', document.getElementById('nav_dashboard'), false);
-      // Show splash (new visit or timed out)
+      // Show splash only on genuine fresh opens or idle timeouts
       const splash = document.getElementById('splash');
-      if(splash && (!lastActivity || (now - lastActivity) > IDLE_MS)) {
-        splash.style.display = 'flex';
-        splash.classList.remove('hide');
-      }
+      if(splash) { splash.style.display = 'flex'; splash.classList.remove('hide'); }
       return;
     }
 
-    // Restore context
+    // Refresh within active session — restore silently, no splash
     const savedDestId = sessionStorage.getItem('lulu_destId');
     const savedProgId = sessionStorage.getItem('lulu_progId');
     const savedTab    = parseInt(sessionStorage.getItem('lulu_destTab')||'0');
@@ -3732,11 +3749,11 @@ function restorePage() {
     if(savedProgId) currentProgId = savedProgId;
     currentDestTab = savedTab;
 
-    // Hide splash — user is returning within 10 min
     const splash = document.getElementById('splash');
     if(splash) { splash.style.display = 'none'; }
 
-    go(page, document.getElementById('nav_'+(page==='destination_detail'?'destinations':page==='program_detail'?'programs':page)), false);
+    const targetPage = page || 'dashboard';
+    go(targetPage, document.getElementById('nav_'+(targetPage==='destination_detail'?'destinations':targetPage==='program_detail'?'programs':targetPage)), false);
 
   } catch(e) {
     go('dashboard', document.getElementById('nav_dashboard'), false);
