@@ -3639,7 +3639,7 @@ function closeModal(){
   modalSaveFn=null;
 }
 function saveModal(){ if(modalSaveFn) try{ modalSaveFn(); }catch(e){ console.error(e); } }
-document.getElementById('modalOverlay').addEventListener('click',e=>{ if(e.target===document.getElementById('modalOverlay')) closeModal(); });
+// Modal only closes via the ✕ button or Cancel — not by clicking outside
 
 function delItem(collection, id, callback) {
   if(!confirm('Delete this item?')) return;
