@@ -1603,7 +1603,7 @@ function fillDestBookings(bks, destId) {
   let rows = '';
   types.forEach(type=>{
     const group = sorted.filter(b=>b.type===type);
-    rows += `<tr><td colspan="8" style="background:var(--surface2);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light);padding:6px 16px;font-weight:600;border-bottom:1px solid var(--border)">${type}</td></tr>`;
+    rows += `<tr><td colspan="9" style="background:var(--surface2);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light);padding:6px 16px;font-weight:600;border-bottom:1px solid var(--border)">${type}</td></tr>`;
     group.forEach(b=>{
       const dateStr = b.date ? (b.dateEnd && b.dateEnd!==b.date ? b.date+' → '+b.dateEnd : b.date) : '—';
       const isAccomm = b.type==='Accommodation';
@@ -1624,6 +1624,13 @@ function fillDestBookings(bks, destId) {
           }
         </td>
         <td>${bstat(b.status||'booked')}</td>
+        <td style="font-size:.72rem">
+          ${b.paid
+            ? `<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600">✓ Paid</span>`
+            : `<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600">Unpaid</span>`
+          }
+          ${b.paidBy&&b.paidBy!=='Me'?`<div style="font-size:.64rem;color:var(--text-light);margin-top:2px">by ${b.paidBy}</div>`:''}
+        </td>
         <td><div style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="openBookingModal('${b.id}','${destId}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="delItem('bookings','${b.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
@@ -1633,7 +1640,7 @@ function fillDestBookings(bks, destId) {
   });
 
   el.innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Name</th><th>Type</th><th>Dates</th><th>Time</th><th>Confirmation</th><th>My Share</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>Dates</th><th>Time</th><th>Confirmation</th><th>My Share</th><th>Status</th><th>Payment</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -1920,6 +1927,12 @@ function openBookingModal(id, destId) {
         <input class="form-input" id="f_bpaidby" placeholder="e.g. Me, Sister, Mom" value="${b.paidBy||'Me'}">
       </div>
     </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="f_bpaid" ${b.paid?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
+        <span style="font-size:.82rem;font-weight:500;color:var(--text)">Mark as Paid</span>
+      </label>
+    </div>
     <div class="form-group"><textarea class="form-textarea" id="f_bno" rows="2" placeholder="Any extra details...">${b.notes||''}</textarea></div>
   `,()=>{
     const type = fv('f_bt');
@@ -1939,7 +1952,7 @@ function openBookingModal(id, destId) {
       totalAmount:fv('f_ba'),
       splitPeople:parseInt(fv('f_bsplit'))||1,
       amount:(parseFloat(fv('f_ba'))||0)/(parseInt(fv('f_bsplit'))||1),
-      status:fv('f_bs'), paidBy:fv('f_bpaidby')||'Me', notes:fv('f_bno')
+      status:fv('f_bs'), paidBy:fv('f_bpaidby')||'Me', paid:document.getElementById('f_bpaid')?.checked||false, notes:fv('f_bno')
     };
     if(id) {
       const i=DB.bookings.findIndex(x=>x.id===id);
@@ -2553,7 +2566,7 @@ function renderBudget(c) {
   const totalIncome   = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
   const totalRecurr   = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   const totalVar      = DB.budgetVarExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const totalSaved    = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.saved||0),0);
+  const totalSaved    = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
   const totalOut      = totalRecurr + totalVar;
   const remaining     = totalIncome - totalOut;
   const remainingColor= remaining >= 0 ? 'var(--green)' : 'var(--red)';
@@ -2578,6 +2591,51 @@ function renderBudget(c) {
       <div class="stat-label">Variable</div>
       <div class="stat-val" style="font-size:1.5rem;color:var(--purple)">₱${fmt(totalVar)}</div>
       <div class="stat-sub">${DB.budgetVarExp.length} entr${DB.budgetVarExp.length!==1?'ies':'y'} this month</div>
+    </div>
+  </div>
+
+  <!-- MONEY IN BANK OVERVIEW -->
+  <div class="card" style="margin-bottom:22px;border-left:4px solid var(--green)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-family:var(--font-display);font-size:1.2rem;color:var(--text)">🏦 Money in Bank</div>
+        <div style="font-size:.72rem;color:var(--text-light);margin-top:2px">Running balance based on all entries</div>
+      </div>
+      <div style="font-family:var(--font-display);font-size:2rem;color:${remaining+totalSaved>=0?'var(--green)':'var(--red)'}">
+        ₱${(remaining+totalSaved).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--green-bg);border-radius:var(--radius-sm);padding:12px 14px">
+        <div style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:6px">💰 Credits (Money In)</div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Monthly Income</span><span style="font-weight:600">₱${fmt(totalIncome)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Savings Added</span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
+        </div>
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--green)">
+          <span>Total In</span><span>₱${fmt(totalIncome+totalSaved)}</span>
+        </div>
+      </div>
+      <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 14px">
+        <div style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--red);font-weight:600;margin-bottom:6px">📤 Debits (Money Out)</div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Recurring Bills</span><span style="font-weight:600">₱${fmt(totalRecurr)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Variable Expenses</span><span style="font-weight:600">₱${fmt(totalVar)}</span>
+        </div>
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--red)">
+          <span>Total Out</span><span>₱${fmt(totalOut)}</span>
+        </div>
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance (Income − Expenses)</span>
+      <span style="font-family:var(--font-display);font-size:1.1rem;color:${remaining>=0?'var(--green)':'var(--red)'};font-weight:600">
+        ${remaining>=0?'+':''}₱${remaining.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
+      </span>
     </div>
   </div>
 
@@ -2679,61 +2737,50 @@ function fillSavingsList() {
   const el = document.getElementById('savingsList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   if(!DB.budgetSavings.length) {
-    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🐷</div><p>No savings yet.<br>Set a target and track your progress.</p></div>`;
+    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🐷</div><p>No savings entries yet.<br>Record each time you set money aside.</p></div>`;
     return;
   }
-  el.innerHTML = DB.budgetSavings.map(g=>{
-    const saved = parseFloat(g.saved||0);
-    const target = parseFloat(g.target||0);
-    const pct = target>0 ? Math.min(100,Math.round(saved/target*100)) : 0;
-    return `
+  const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  el.innerHTML = `
+    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
+      <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
+      <span style="font-weight:600;color:var(--green)">Total saved: ₱${fmt(total)}</span>
+    </div>` +
+  sorted.map(g=>`
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${g.label}</div>
-          <div style="font-size:.7rem;color:var(--text-light)">${g.notes||''}</div>
+          <div style="font-size:.7rem;color:var(--text-light)">${g.date||''}</div>
+          ${g.notes?`<div style="font-size:.8rem;color:var(--text);margin-top:2px">${g.notes}</div>`:''}
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">₱${fmt(saved)}</div>
-          ${target>0?`<div style="font-size:.65rem;color:var(--text-light)">of ₱${fmt(target)}</div>`:''}
-        </div>
+        <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green);flex-shrink:0">₱${fmt(g.amount)}</div>
       </div>
-      ${target>0?`
-        <div style="margin-top:8px">
-          <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-light);margin-bottom:4px">
-            <span>${pct}% reached</span>
-            <span>₱${fmt(target-saved)} to go</span>
-          </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:var(--green)"></div></div>
-        </div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 function openSavingsModal(id) {
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const item = id ? DB.budgetSavings.find(x=>x.id===id)||{} : {};
-  openModal(id?'Edit Savings':'Add to Savings', `
-    <div class="form-group"><label class="form-label">Goal Name</label>
-      <input class="form-input" id="f_slabel" placeholder="e.g. Emergency Fund, Travel Fund, New Phone" value="${item.label||''}">
+  openModal(id?'Edit Savings Entry':'Add to Savings', `
+    <div class="form-group"><label class="form-label">Amount Saved (₱)</label>
+      <input class="form-input" id="f_samt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
     </div>
-    <div class="fr2">
-      <div class="form-group"><label class="form-label">Target Amount (₱)</label>
-        <input class="form-input" id="f_starget" type="number" step="0.01" placeholder="0.00" value="${item.target||''}">
-      </div>
-      <div class="form-group"><label class="form-label">Amount Saved So Far (₱)</label>
-        <input class="form-input" id="f_ssaved" type="number" step="0.01" placeholder="0.00" value="${item.saved||''}">
-      </div>
+    <div class="form-group"><label class="form-label">Notes <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
+      <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="e.g. From salary, bonus, savings challenge...">${item.notes||''}</textarea>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label>
-      <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="What are you saving for? Timeline, strategy...">${item.notes||''}</textarea>
-    </div>
+    ${id?`<div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_sdate" type="date" value="${item.date||td()}"></div>`:''}
   `, () => {
-    const obj = {id:id||uid(), label:fv('f_slabel'), target:fv('f_starget'), saved:fv('f_ssaved'), notes:fv('f_snotes')};
+    const obj = {
+      id:id||uid(),
+      amount:fv('f_samt'),
+      notes:fv('f_snotes'),
+      date: id ? fv('f_sdate') : td()
+    };
     if(id) { const i=DB.budgetSavings.findIndex(x=>x.id===id); DB.budgetSavings[i]=obj; }
     else DB.budgetSavings.push(obj);
     save(); closeModal(); renderBudget(document.getElementById('content'));
