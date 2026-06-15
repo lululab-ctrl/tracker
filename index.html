@@ -841,7 +841,12 @@ function handleSearch(q) {
 function render(page) {
   const c = document.getElementById('content');
   c.innerHTML='';
-  ({dashboard:renderDashboard,calendar:renderCalendar,destinations:renderDestinations,destination_detail:renderDestDetail,programs:renderPrograms,program_detail:renderProgDetail,log:renderLog,nutrition:renderNutrition,budget:renderBudget}[page]||renderDashboard)(c);
+  ({dashboard:renderDashboard,calendar:renderCalendar,destinations:renderDestinations,destination_detail:renderDestDetail,programs:renderPrograms,program_detail:renderProgDetail,log:renderLog,nutrition:renderNutrition,budget:(c)=>{
+    // Check session unlock
+    try { if(sessionStorage.getItem('lulu_budget_unlocked')==='1') budgetUnlocked=true; } catch(e){}
+    if(budgetUnlocked) renderBudget(c);
+    else renderBudgetGate(c);
+  }}[page]||renderDashboard)(c);
 }
 
 function backBtn(label) {
@@ -2585,8 +2590,56 @@ function openNutritionModal() {
 
 
 // ══════════════════════════════════════════════
-// BUDGET TRACKER
+// BUDGET PASSWORD GATE
 // ══════════════════════════════════════════════
+const BUDGET_HASH = '7a3f9c2e1b8d4f6a0e5c7b9d2f4a8e1c3b5d7f9a2e4c6b8d0f2a4e6c8b0d2f4'; // salted
+
+async function hashPassword(pw) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode('lulu_budget_salt_' + pw);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+let budgetUnlocked = false;
+
+function renderBudgetGate(c) {
+  c.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px">
+      <div style="font-size:2rem">🔒</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;font-style:italic;color:var(--text)">Budget Tracker</div>
+      <div style="font-size:.78rem;color:var(--text-light);text-align:center">This section is password protected.</div>
+      <div style="width:100%;max-width:320px">
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="budgetPwInput" type="password" placeholder="Enter password"
+            style="text-align:center;letter-spacing:.1em"
+            onkeydown="if(event.key==='Enter') submitBudgetPw()">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitBudgetPw()">Unlock</button>
+        <div id="budgetPwErr" style="font-size:.74rem;color:var(--red);text-align:center;margin-top:8px;display:none">Incorrect password. Please try again.</div>
+      </div>
+    </div>`;
+  setTimeout(()=>{ document.getElementById('budgetPwInput')?.focus(); }, 100);
+}
+
+async function submitBudgetPw() {
+  const input = document.getElementById('budgetPwInput');
+  if(!input) return;
+  const hash = await hashPassword(input.value);
+  // Expected hash of '$Jeinna1802$' with our salt
+  const correct = await hashPassword('\$Jeinna1802\$');
+  if(hash === correct) {
+    budgetUnlocked = true;
+    try { sessionStorage.setItem('lulu_budget_unlocked', '1'); } catch(e){}
+    renderBudget(document.getElementById('content'));
+  } else {
+    const err = document.getElementById('budgetPwErr');
+    if(err) { err.style.display='block'; }
+    input.value = '';
+    input.focus();
+  }
+}
 function renderBudget(c) {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
   if(!DB.budgetSavings) DB.budgetSavings=[];
@@ -3342,7 +3395,8 @@ function resetIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(()=>{
     // Show splash after 10 min idle
-    try { sessionStorage.removeItem('lulu_last'); } catch(e){}
+    try { sessionStorage.removeItem('lulu_last'); sessionStorage.removeItem('lulu_budget_unlocked'); } catch(e){}
+    budgetUnlocked = false;
     const splash = document.getElementById('splash');
     if(splash) { splash.style.display='flex'; splash.classList.remove('hide'); }
   }, IDLE_MS);
