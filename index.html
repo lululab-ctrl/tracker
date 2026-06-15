@@ -3239,8 +3239,8 @@ function fillIncomeList() {
       ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:600;margin-top:6px">${i.day1} · ₱${fmt(i.amt1)}</span>`
       : '';
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:90px">
+      <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${i.type||'Income'}</div>
           <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${schedLabel(i.paySchedule)}</div>
@@ -3252,7 +3252,7 @@ function fillIncomeList() {
           <div style="font-size:.6rem;color:var(--text-light);letter-spacing:.04em">/month</div>
         </div>
       </div>
-      <div style="display:flex;gap:5px;margin-top:8px">
+      <div style="display:flex;gap:5px;margin-top:auto">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openIncomeModal('${i.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
@@ -3302,8 +3302,8 @@ function fillSavingsList() {
       }
     } catch(e){}
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:90px">
+      <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||'Savings'}</div>
           <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${dateLabel}</div>
@@ -3313,7 +3313,7 @@ function fillSavingsList() {
           <span style="display:inline-flex;align-items:center;background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">saved</span>
         </div>
       </div>
-      <div style="display:flex;gap:5px;margin-top:8px">
+      <div style="display:flex;gap:5px;margin-top:auto">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
