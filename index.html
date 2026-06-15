@@ -2989,47 +2989,60 @@ function renderBudget(c) {
   const nowYM = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   if(!monthOptions.find(m=>m.val===budgetMonth)) budgetMonth = nowYM;
 
-  const totalIncome = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  // Income is date-specific — only count entries whose payday (day1) falls in the selected month
+  const incomeForMonth = DB.budgetIncome.filter(i=>{
+    const d = (i.day1||'').slice(0,7); // day1 is the actual payday date YYYY-MM-DD
+    return d === budgetMonth;
+  });
+  const totalIncome = incomeForMonth.reduce((s,i)=>s+parseFloat(i.amount||0),0);
   // Recurring always counts (monthly fixed bills)
   const totalRecurr = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   // Variable expenses filtered to selected month
   const varForMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth);
   const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const totalSaved  = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  // Savings also filtered to selected month
+  const savingsForMonth = (DB.budgetSavings||[]).filter(g=>(g.date||'').slice(0,7)===budgetMonth);
+  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0);
 
-  // ── Carryover: live computation of prior months' cumulative net ──
+  // ── Carryover: net surplus/deficit from all prior months ──
+  // Only carry what's LEFT after income - recurring - variable each month.
+  // Current month's income is added separately, so carryover must NOT re-include prior income.
   if(!DB.budgetCarryover) DB.budgetCarryover = {};
 
-  function prevYM(ym) {
-    const [y,m] = ym.split('-').map(Number);
-    return m===1 ? (y-1)+'-12' : y+'-'+String(m-1).padStart(2,'0');
-  }
+  // Find the earliest month with any variable expense
+  const allTxMonths = [...new Set([
+    ...DB.budgetVarExp.map(e=>(e.date||'').slice(0,7)),
+    ...DB.budgetIncome.map(i=>(i.day1||'').slice(0,7)),
+  ].filter(Boolean))].sort();
+  const earliestMonth = allTxMonths[0] || null;
 
-  // Find the earliest month that has any variable expense data
-  const allVarMonths = [...new Set(
-    DB.budgetVarExp.map(e=>(e.date||'').slice(0,7)).filter(Boolean)
-  )].sort();
-  const earliestMonth = allVarMonths[0] || budgetMonth;
-
-  // Accumulate net from earliestMonth up to (but not including) budgetMonth
+  // Compute cumulative net from earliestMonth up to (not including) targetYM
+  // Net per month = income - recurring - varExpenses
+  // Carryover into targetYM is the running balance of all prior months
   function computeCarryover(targetYM) {
+    if(!earliestMonth || earliestMonth >= targetYM) return 0;
     let carry = 0;
     let cur = earliestMonth;
-    // walk forward month by month until we reach targetYM
     while(cur < targetYM) {
-      const inc = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+      const inc = DB.budgetIncome.filter(i=>(i.day1||'').slice(0,7)===cur)
+                     .reduce((s,i)=>s+parseFloat(i.amount||0),0);
       const rec = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
       const varExp = DB.budgetVarExp
         .filter(e=>(e.date||'').slice(0,7)===cur)
         .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-      carry += inc - rec - varExp;
-      // advance one month
+      // Net for this month: what's left after paying everything
+      const net = inc - rec - varExp;
+      carry += net;
+      // Advance one month
       const [y,m] = cur.split('-').map(Number);
       cur = m===12 ? (y+1)+'-01' : y+'-'+String(m+1).padStart(2,'0');
     }
     return carry;
   }
 
+  // Carryover = cumulative net of all months BEFORE the current budgetMonth
+  // This represents leftover cash brought into this month
+  // Current month then adds its own fresh income on top
   const carryover = computeCarryover(budgetMonth);
 
   const totalOut    = totalRecurr + totalVar;
@@ -3056,9 +3069,9 @@ function renderBudget(c) {
   <!-- SUMMARY CARDS -->
   <div class="grid-3" style="margin-bottom:20px">
     <div class="card card-sm">
-      <div class="stat-label">Monthly Income</div>
+      <div class="stat-label">Income This Month</div>
       <div class="stat-val" style="font-size:1.5rem;color:var(--green)">₱${fmt(totalIncome)}</div>
-      <div class="stat-sub">${DB.budgetIncome.length} source${DB.budgetIncome.length!==1?'s':''}</div>
+      <div class="stat-sub">${incomeForMonth.length} source${incomeForMonth.length!==1?'s':''} this month</div>
     </div>
     <div class="card card-sm">
       <div class="stat-label">Recurring</div>
@@ -3210,12 +3223,12 @@ function renderBudget(c) {
 function fillIncomeList() {
   const el = document.getElementById('incomeList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(!DB.budgetIncome.length) {
-    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">💰</div><div style="font-size:.8rem">No income added yet.</div></div>`;
+  const items = DB.budgetIncome.filter(i=>(i.day1||'').slice(0,7)===budgetMonth);
+  if(!items.length) {
+    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">💰</div><div style="font-size:.8rem">No income added for this month yet.</div></div>`;
     return;
   }
-  const total = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-  const items = DB.budgetIncome;
+  const total = items.reduce((s,i)=>s+parseFloat(i.amount||0),0);
   const visible = items.slice(0,3);
   const hidden  = items.slice(3);
 
@@ -3226,7 +3239,7 @@ function fillIncomeList() {
       ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:600;margin-top:6px">${i.day1} · ₱${fmt(i.amt1)}</span>`
       : '';
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light)">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${i.type||'Income'}</div>
@@ -3269,17 +3282,18 @@ function fillSavingsList() {
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const el = document.getElementById('savingsList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(!DB.budgetSavings.length) {
-    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No savings yet.<br>Record each time you set money aside.</div></div>`;
+  const sorted = [...DB.budgetSavings]
+    .filter(g=>(g.date||'').slice(0,7)===budgetMonth)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(!sorted.length) {
+    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No savings added for this month yet.</div></div>`;
     return;
   }
-  const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
   const visible = sorted.slice(0,3);
   const hidden  = sorted.slice(3);
 
   function savCard(g) {
-    // Format date nicely if possible
     let dateLabel = g.date||'';
     try {
       if(g.date) {
@@ -3288,7 +3302,7 @@ function fillSavingsList() {
       }
     } catch(e){}
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light)">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||'Savings'}</div>
@@ -3296,7 +3310,7 @@ function fillSavingsList() {
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green)">₱${fmt(g.amount)}</div>
-          <span style="display:inline-flex;align-items:center;gap:3px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">saved</span>
+          <span style="display:inline-flex;align-items:center;background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">saved</span>
         </div>
       </div>
       <div style="display:flex;gap:5px;margin-top:8px">
