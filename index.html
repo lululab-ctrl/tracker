@@ -3181,66 +3181,57 @@ function fillIncomeList() {
   const el = document.getElementById('incomeList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   if(!DB.budgetIncome.length) {
-    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">💰</div><p>No income added yet.</p></div>`;
+    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">💰</div><div style="font-size:.8rem">No income added yet.</div></div>`;
     return;
   }
   const total = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-  const incomeItems = DB.budgetIncome;
-  const incomeVisible = incomeItems.slice(0,3);
-  const incomeHidden  = incomeItems.slice(3);
-  el.innerHTML = `
-    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${incomeItems.length} entr${incomeItems.length!==1?'ies':'y'}</span>
-      <span style="font-weight:600;color:var(--green)">Total: ₱${fmt(total)}/mo</span>
-    </div>`;
-  function renderIncomeCard(i) {
-    const schedLabel = {monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
-    let schedDetail = '';
-    if(i.paySchedule==='split') {
-      schedDetail = `
-        <div style="margin-top:6px;display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:5px 10px">
-          <span style="font-size:.65rem;color:var(--text-light)">${i.day1||''}</span>
-          <span style="font-size:.82rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</span>
-        </div>`;
-    }
+  const items = DB.budgetIncome;
+  const visible = items.slice(0,3);
+  const hidden  = items.slice(3);
+
+  const schedLabel = s => ({monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[s||'monthly']);
+
+  function incCard(i) {
+    const chip = i.paySchedule==='split' && i.day1
+      ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:600;margin-top:6px">${i.day1} · ₱${fmt(i.amt1)}</span>`
+      : '';
     return `
-    <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.type||'Income'}</div>
-          <div style="font-size:.68rem;color:var(--text-light)">${schedLabel}</div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${i.type||'Income'}</div>
+          <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${schedLabel(i.paySchedule)}</div>
+          ${chip}
+          ${i.notes?`<div style="font-size:.68rem;color:var(--text-light);margin-top:4px;font-style:italic">${i.notes}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">₱${fmt(i.amount)}</div>
-          <div style="font-size:.62rem;color:var(--text-light)">/month</div>
+          <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green)">₱${fmt(i.amount)}</div>
+          <div style="font-size:.6rem;color:var(--text-light);letter-spacing:.04em">/month</div>
         </div>
       </div>
-      ${schedDetail}
-      ${i.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${i.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openIncomeModal('${i.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`; /* end income card */
+    </div>`;
   }
-  incomeVisible.forEach(i=>{ el.innerHTML += renderIncomeCard(i); });
-  if(incomeHidden.length) {
-    const hiddenDiv = document.createElement('div');
-    hiddenDiv.id = 'incomeExtra';
-    hiddenDiv.style.display = 'none';
-    incomeHidden.forEach(i=>{ hiddenDiv.innerHTML += renderIncomeCard(i); });
-    el.appendChild(hiddenDiv);
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'btn btn-ghost btn-sm';
-    toggleBtn.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    toggleBtn.textContent = `Show ${incomeHidden.length} more`;
-    toggleBtn.onclick = function(){
-      const d = document.getElementById('incomeExtra');
-      const shown = d.style.display!=='none';
-      d.style.display = shown?'none':'block';
-      this.textContent = shown?`Show ${incomeHidden.length} more`:'Show less';
-    };
-    el.appendChild(toggleBtn);
+
+  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px;display:flex;justify-content:space-between">
+    <span>${items.length} entr${items.length!==1?'ies':'y'}</span>
+    <span style="font-weight:600;color:var(--green)">₱${fmt(total)}/mo</span>
+  </div>`;
+  visible.forEach(i=>{ el.innerHTML += incCard(i); });
+  if(hidden.length) {
+    const hd = document.createElement('div');
+    hd.id='incomeExtra'; hd.style.display='none';
+    hidden.forEach(i=>{ hd.innerHTML += incCard(i); });
+    el.appendChild(hd);
+    const tb = document.createElement('button');
+    tb.className='btn btn-ghost btn-sm';
+    tb.style.cssText='width:100%;margin-top:6px;font-size:.7rem';
+    tb.textContent=`Show ${hidden.length} more`;
+    tb.onclick=function(){ const d=document.getElementById('incomeExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
+    el.appendChild(tb);
   }
 }
 
@@ -3249,43 +3240,57 @@ function fillSavingsList() {
   const el = document.getElementById('savingsList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   if(!DB.budgetSavings.length) {
-    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🐷</div><p>No savings entries yet.<br>Record each time you set money aside.</p></div>`;
+    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No savings yet.<br>Record each time you set money aside.</div></div>`;
     return;
   }
   const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  const savVisible = sorted.slice(0,3);
-  const savHidden  = sorted.slice(3);
-  el.innerHTML = `
-    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
-      <span style="font-weight:600;color:var(--green)">Total saved: ₱${fmt(total)}</span>
-    </div>`;
-  function savCard(g){ return `
-    <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+  const visible = sorted.slice(0,3);
+  const hidden  = sorted.slice(3);
+
+  function savCard(g) {
+    // Format date nicely if possible
+    let dateLabel = g.date||'';
+    try {
+      if(g.date) {
+        const d = new Date(g.date+'T12:00:00');
+        dateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      }
+    } catch(e){}
+    return `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.7rem;color:var(--text-light)">${g.date||''}</div>
-          ${g.notes?`<div style="font-size:.8rem;color:var(--text);margin-top:2px">${g.notes}</div>`:''}
+          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||'Savings'}</div>
+          <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${dateLabel}</div>
         </div>
-        <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green);flex-shrink:0">₱${fmt(g.amount)}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green)">₱${fmt(g.amount)}</div>
+          <span style="display:inline-flex;align-items:center;gap:3px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">saved</span>
+        </div>
       </div>
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`; }
-  savVisible.forEach(g=>{ el.innerHTML += savCard(g); });
-  if(savHidden.length) {
+    </div>`;
+  }
+
+  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px;display:flex;justify-content:space-between">
+    <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
+    <span style="font-weight:600;color:var(--green)">Total: ₱${fmt(total)}</span>
+  </div>`;
+  visible.forEach(g=>{ el.innerHTML += savCard(g); });
+  if(hidden.length) {
     const hd = document.createElement('div');
-    hd.id = 'savingsExtra'; hd.style.display = 'none';
-    savHidden.forEach(g=>{ hd.innerHTML += savCard(g); });
+    hd.id='savingsExtra'; hd.style.display='none';
+    hidden.forEach(g=>{ hd.innerHTML += savCard(g); });
     el.appendChild(hd);
     const tb = document.createElement('button');
-    tb.className = 'btn btn-ghost btn-sm';
-    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    tb.textContent = `Show ${savHidden.length} more`;
-    tb.onclick = function(){ const d=document.getElementById('savingsExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${savHidden.length} more`:'Show less'; };
+    tb.className='btn btn-ghost btn-sm';
+    tb.style.cssText='width:100%;margin-top:6px;font-size:.7rem';
+    tb.textContent=`Show ${hidden.length} more`;
+    tb.onclick=function(){ const d=document.getElementById('savingsExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
     el.appendChild(tb);
   }
 }
