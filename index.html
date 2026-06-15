@@ -551,7 +551,7 @@ function migrateDB(db) {
   const defaults = {
     destinations:[],bookings:[],expenses:[],packingLists:[],
     memories:[],documents:[],itineraries:[],programs:[],
-    workoutLogs:[],goals:[],nutrition:[],calEvents:[],budgetIncome:[],budgetLoans:[],budgetBills:[],budgetVarExp:[]
+    workoutLogs:[],goals:[],nutrition:[],calEvents:[],budgetIncome:[],budgetLoans:[],budgetBills:[],budgetVarExp:[],budgetSavings:[]
   };
   Object.keys(defaults).forEach(k=>{ if(!Array.isArray(db[k])) db[k]=defaults[k]; });
   return db;
@@ -646,7 +646,7 @@ function showSyncStatus(state) {
 const EMPTY_DB = {
   destinations:[], bookings:[], expenses:[], packingLists:[],
   memories:[], documents:[], itineraries:[], programs:[],
-  workoutLogs:[], goals:[], nutrition:[], calEvents:[], budgetIncome:[], budgetLoans:[], budgetBills:[], budgetVarExp:[],
+  workoutLogs:[], goals:[], nutrition:[], calEvents:[], budgetIncome:[], budgetLoans:[], budgetBills:[], budgetVarExp:[], budgetSavings:[],
 };
 
 let DB = (() => {
@@ -1114,8 +1114,9 @@ function renderDestinations(c) {
   });
 }
 
-function openDest(id) {
+function openDest(id, tabIndex) {
   currentDestId = id;
+  if(tabIndex !== undefined) currentDestTab = tabIndex;
   go('destination_detail', null);
 }
 
@@ -1163,19 +1164,19 @@ function renderDestDetail(c) {
   const tabsEl=document.createElement('div');
   const tabs=['Itinerary','Bookings','Budget','Packing','Documents','Memories'];
   tabsEl.className='tabs';
-  tabsEl.innerHTML=tabs.map((t,i)=>`<div class="tab${i===0?' active':''}" onclick="switchDestTab(${i})">${t}</div>`).join('');
+  tabsEl.innerHTML=tabs.map((t,i)=>`<div class="tab${i===currentDestTab?' active':''}" onclick="switchDestTab(${i})">${t}</div>`).join('');
   c.appendChild(tabsEl);
 
   // panels
   const panels=document.createElement('div');
   panels.innerHTML=`
   <!-- 0: ITINERARY -->
-  <div class="tab-panel active" id="dp0">
+  <div class="tab-panel${currentDestTab===0?' active':''}" id="dp0">
     <div id="itinContent"></div>
   </div>
 
   <!-- 1: BOOKINGS -->
-  <div class="tab-panel" id="dp1">
+  <div class="tab-panel${currentDestTab===1?' active':''}" id="dp1">
     <div class="sec-head">
         <div class="sec-title">Bookings</div>
         <div class="sec-actions" style="gap:6px;flex-wrap:wrap">
@@ -1194,26 +1195,41 @@ function renderDestDetail(c) {
   </div>
 
   <!-- 2: BUDGET -->
-  <div class="tab-panel" id="dp2">
-    <div class="sec-head"><div class="sec-title">Budget & Expenses</div><button class="btn btn-primary btn-sm" onclick="openExpenseModal('${d.id}')">+ Add Expense</button></div>
+  <div class="tab-panel${currentDestTab===2?' active':''}" id="dp2">
+    <div class="sec-head">
+        <div class="sec-title">Budget & Expenses</div>
+        <div class="sec-actions" style="gap:6px;flex-wrap:wrap">
+          <select class="form-select" id="expPayerFilter" style="width:140px;font-size:.74rem" onchange="applyExpFilter('${d.id}')">
+            <option value="">All Payers</option>
+            <option value="Me">Paid by Me</option>
+            <option value="others">Paid by Others</option>
+          </select>
+          <select class="form-select" id="expPaidFilter" style="width:120px;font-size:.74rem" onchange="applyExpFilter('${d.id}')">
+            <option value="">All</option>
+            <option value="paid">Paid ✓</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openExpenseModal('${d.id}')">+ Add</button>
+        </div>
+      </div>
     <div id="expStats" style="margin-bottom:16px"></div>
     <div id="expTable"></div>
   </div>
 
   <!-- 3: PACKING -->
-  <div class="tab-panel" id="dp3">
+  <div class="tab-panel${currentDestTab===3?' active':''}" id="dp3">
     <div class="sec-head"><div class="sec-title">Packing Lists</div><button class="btn btn-primary btn-sm" onclick="openPackingModal('${d.id}')">+ New List</button></div>
     <div id="packContent"></div>
   </div>
 
   <!-- 4: DOCUMENTS -->
-  <div class="tab-panel" id="dp4">
+  <div class="tab-panel${currentDestTab===4?' active':''}" id="dp4">
     <div class="sec-head"><div class="sec-title">Documents & Confirmations</div><button class="btn btn-primary btn-sm" onclick="openDocModal('${d.id}')">+ Add Document</button></div>
     <div id="docContent"></div>
   </div>
 
   <!-- 5: MEMORIES -->
-  <div class="tab-panel" id="dp5">
+  <div class="tab-panel${currentDestTab===5?' active':''}" id="dp5">
     <div class="sec-head"><div class="sec-title">Photos & Memories</div><button class="btn btn-primary btn-sm" onclick="openMemoryModal('${d.id}')">+ Add Memory</button></div>
     <div id="memContent"></div>
   </div>`;
@@ -1229,6 +1245,7 @@ function renderDestDetail(c) {
 }
 
 function switchDestTab(i) {
+  currentDestTab = i;
   document.querySelectorAll('.tabs .tab').forEach((t,idx)=>t.classList.toggle('active',idx===i));
   document.querySelectorAll('.tab-panel').forEach((p,idx)=>p.classList.toggle('active',idx===i));
 }
@@ -1237,6 +1254,7 @@ function switchDestTab(i) {
 // ITINERARY SYSTEM
 // ══════════════════════════════════════════════
 let currentItinDay = null; // currently viewed day id
+let currentDestTab = 0; // track active destination tab
 
 function fillItinerary(dest) {
   const el = document.getElementById('itinContent');
@@ -1485,7 +1503,7 @@ function openAddItinEntryModal(dayId, destId, presetTime) {
     if(!day.entries) day.entries=[];
     day.entries = day.entries.filter(e=>e.time!==time);
     day.entries.push({id:uid(),time,endTime:fv('f_eet'),type:fv('f_etp'),title:fv('f_etitle'),detail:fv('f_edetail'),note:fv('f_enote')});
-    save(); closeModal(); openDest(destId);
+    save(); closeModal(); openDest(destId, currentDestTab);
     setTimeout(()=>{ switchItinDay(dayId, destId); },50);
   });
 }
@@ -1526,7 +1544,7 @@ function editItinEntry(dayId, entryId, destId) {
     if(e.time !== oldTime) {
       day.entries = day.entries.filter(x=>x.id===entryId||x.time!==e.time);
     }
-    save(); closeModal(); openDest(destId);
+    save(); closeModal(); openDest(destId, currentDestTab);
     setTimeout(()=>{ switchItinDay(dayId, destId); },50);
   });
 }
@@ -1535,7 +1553,7 @@ function deleteItinEntry(dayId, entryId, destId) {
   const day = DB.itineraries.find(x=>x.id===dayId);
   if(!day) return;
   day.entries = (day.entries||[]).filter(x=>x.id!==entryId);
-  save(); openDest(destId);
+  save(); openDest(destId, 0);
   setTimeout(()=>{ switchItinDay(dayId, destId); },50);
 }
 
@@ -1549,6 +1567,13 @@ function generateTimeOptions(endTime, minTime, selected) {
     opts+=`<option value="${val}"${val===selected?' selected':''}>${formatTime(val)}</option>`;
   }
   return opts;
+}
+
+function applyExpFilter(destId) {
+  const payerF = document.getElementById('expPayerFilter')?.value||'';
+  const paidF  = document.getElementById('expPaidFilter')?.value||'';
+  const exps = DB.expenses.filter(e=>e.destId===destId);
+  fillDestBudget(exps, destId, payerF, paidF);
 }
 
 function applyBookingFilter(destId) {
@@ -1601,7 +1626,7 @@ function fillDestBookings(bks, destId) {
         <td>${bstat(b.status||'booked')}</td>
         <td><div style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="openBookingModal('${b.id}','${destId}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="delItem('bookings','${b.id}',()=>openDest('${destId}'))">✕</button>
+          <button class="btn btn-danger btn-sm" onclick="delItem('bookings','${b.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
         </div></td>
       </tr>`;
     });
@@ -1613,7 +1638,7 @@ function fillDestBookings(bks, destId) {
   </table></div>`;
 }
 
-function fillDestBudget(exps, destId) {
+function fillDestBudget(exps, destId, payerFilter, paidFilter) {
   const st=document.getElementById('expStats'), tbl=document.getElementById('expTable');
   if(!st||!tbl) return;
 
@@ -1637,8 +1662,15 @@ function fillDestBudget(exps, destId) {
   const manualExps = exps.filter(e=>!e._fromBooking);
 
   // Combined list
+  // Apply filters
+  let manualFiltered = manualExps;
+  if(payerFilter==='Me') manualFiltered = manualFiltered.filter(e=>(e.paidBy||'Me')==='Me');
+  else if(payerFilter==='others') manualFiltered = manualFiltered.filter(e=>e.paidBy&&e.paidBy!=='Me');
+  if(paidFilter==='paid') manualFiltered = manualFiltered.filter(e=>e.paid);
+  else if(paidFilter==='unpaid') manualFiltered = manualFiltered.filter(e=>!e.paid);
+
   // Sort chronologically: by date asc, then by booking time asc
-  const allEntries = [...bookingEntries, ...manualExps].sort((a,b)=>{
+  const allEntries = [...bookingEntries, ...manualFiltered].sort((a,b)=>{
     const dateCmp = (a.date||'').localeCompare(b.date||'');
     if(dateCmp!==0) return dateCmp;
     // secondary sort by time (checkInTime for accommodation, bookingTime for others)
@@ -1662,22 +1694,27 @@ function fillDestBudget(exps, destId) {
   }
 
   tbl.innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Description</th><th>Category</th><th>Date</th><th>My Share</th><th>Total</th><th></th></tr></thead>
-    <tbody>${allEntries.map(e=>`<tr>
+    <thead><tr><th>Description</th><th>Category</th><th>Date</th><th>My Share</th><th>Total</th><th>Paid By</th><th>Status</th><th></th></tr></thead>
+    <tbody>${allEntries.map(e=>`<tr style="${e.paid?'opacity:.7':''}">
       <td>
-        <div style="font-weight:500;font-size:.8rem">${e.description}</div>
+        <div style="font-weight:500;font-size:.8rem;${e.paid?'text-decoration:line-through;color:var(--text-light)':''}">${e.description}</div>
         ${e._isBooking?`<div style="font-size:.65rem;color:var(--text-light);margin-top:2px">From booking</div>`:''}
-        ${!e._isBooking&&e.sharedWith?`<div style="font-size:.65rem;margin-top:2px"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span></div>`:''}
+        ${!e._isBooking&&e.sharedWith?`<div style="font-size:.65rem;margin-top:2px"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 ${e.sharedWith}</span></div>`:''}
       </td>
       <td><span class="badge b-amber">${e.category}</span></td>
       <td style="font-size:.72rem">${e.date||'—'}</td>
-      <td style="font-weight:500;color:var(--accent)">₱${parseFloat(e.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td style="font-weight:500;color:${e.paid?'var(--text-light)':'var(--accent)'}">₱${parseFloat(e.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="font-size:.72rem;color:var(--text-light)">${e.splitPeople>1?'₱'+parseFloat(e.totalAmount||e.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td style="font-size:.74rem;color:var(--text-mid)">${e.paidBy||'—'}</td>
+      <td>${e.paid
+        ? `<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600">✓ Paid</span>`
+        : `<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600">Unpaid</span>`
+      }</td>
       <td>${e._isBooking
         ? `<span style="font-size:.65rem;color:var(--text-light);font-style:italic">Edit in Bookings</span>`
         : `<div style="display:flex;gap:4px">
              <button class="btn btn-ghost btn-sm" onclick="openExpenseModal('${destId}','${e.id}')">Edit</button>
-             <button class="btn btn-danger btn-sm" onclick="delItem('expenses','${e.id}',()=>openDest('${destId}'))">✕</button>
+             <button class="btn btn-danger btn-sm" onclick="delItem('expenses','${e.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
            </div>`
       }</td>
     </tr>`).join('')}</tbody>
@@ -1698,7 +1735,7 @@ function fillDestPacking(packs, destId) {
         <div style="font-family:var(--font-display);font-size:1.1rem">${pl.name}</div>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="badge b-gray">${packed}/${pl.items.length}</span>
-          <button class="btn btn-danger btn-sm" onclick="delItem('packingLists','${pl.id}',()=>openDest('${destId}'))">✕</button>
+          <button class="btn btn-danger btn-sm" onclick="delItem('packingLists','${pl.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
         </div>
       </div>
       <div class="prog-bar" style="margin-bottom:12px"><div class="prog-fill" style="width:${pct}%"></div></div>
@@ -1725,7 +1762,7 @@ function fillDestDocs(docs, destId) {
       <td style="font-weight:500">${doc.title}</td>
       <td><span class="badge b-blue">${doc.type}</span></td>
       <td style="font-size:.72rem;color:var(--text-light)">${doc.notes||'—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="delItem('documents','${doc.id}',()=>openDest('${destId}'))">✕</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="delItem('documents','${doc.id}',()=>openDest('${destId}',currentDestTab))">✕</button></td>
     </tr>`).join('')}</tbody></table>`;
   el.appendChild(wrap);
 }
@@ -1741,7 +1778,7 @@ function fillDestMemories(mems, destId) {
           <div style="font-family:var(--font-display);font-size:1.2rem">${m.title}</div>
           <div style="font-size:.7rem;color:var(--text-light)">${m.date||''}</div>
         </div>
-        <button class="btn btn-danger btn-sm" onclick="delItem('memories','${m.id}',()=>openDest('${destId}'))">Delete</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('memories','${m.id}',()=>openDest('${destId}',currentDestTab))">Delete</button>
       </div>
       ${m.notes?`<p style="font-size:.8rem;color:var(--text-mid);line-height:1.8;margin-bottom:10px">${m.notes}</p>`:''}
       ${m.photos&&m.photos.length?`<div class="photo-grid">${m.photos.map((p,pi)=>`
@@ -1879,7 +1916,9 @@ function openBookingModal(id, destId) {
           ${['booked','confirmed','completed','cancelled'].map(s=>`<option${(b.status||'booked')===s?' selected':''}>${s}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Notes</label></div>
+      <div class="form-group"><label class="form-label">Paid by</label>
+        <input class="form-input" id="f_bpaidby" placeholder="e.g. Me, Sister, Mom" value="${b.paidBy||'Me'}">
+      </div>
     </div>
     <div class="form-group"><textarea class="form-textarea" id="f_bno" rows="2" placeholder="Any extra details...">${b.notes||''}</textarea></div>
   `,()=>{
@@ -1900,7 +1939,7 @@ function openBookingModal(id, destId) {
       totalAmount:fv('f_ba'),
       splitPeople:parseInt(fv('f_bsplit'))||1,
       amount:(parseFloat(fv('f_ba'))||0)/(parseInt(fv('f_bsplit'))||1),
-      status:fv('f_bs'), notes:fv('f_bno')
+      status:fv('f_bs'), paidBy:fv('f_bpaidby')||'Me', notes:fv('f_bno')
     };
     if(id) {
       const i=DB.bookings.findIndex(x=>x.id===id);
@@ -1915,11 +1954,11 @@ function openBookingModal(id, destId) {
       // auto-create expense entry in destination budget
       const expId = uid();
       const typeToCategory = {Flight:'Flights',Accommodation:'Accommodation',Train:'Transport',Ferry:'Transport',Bus:'Transport',Tour:'Activities',Restaurant:'Food',Other:'Other'};
-      DB.expenses.push({id:expId,destId:dId,description:obj.name,category:typeToCategory[obj.type]||'Other',amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,date:obj.date,_fromBooking:true});
+      DB.expenses.push({id:expId,destId:dId,description:obj.name,category:typeToCategory[obj.type]||'Other',amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,paidBy:obj.paidBy,date:obj.date,_fromBooking:true});
       obj._expId = expId;
       DB.bookings.push(obj);
     }
-    save(); closeModal(); openDest(dId);
+    save(); closeModal(); openDest(dId, currentDestTab);
   }, false, 'Save Booking');
 }
 
@@ -1971,6 +2010,7 @@ function openExpenseModal(destId, id) {
   const e = id ? DB.expenses.find(x=>x.id===id)||{} : {};
   const splitPeople = e.splitPeople||1;
   const totalAmt = e.totalAmount||e.amount||'';
+  const paidBy = e.paidBy||'Me';
   openModal(id?'Edit Expense':'Add Expense',`
     <div class="form-group"><label class="form-label">Description</label>
       <input class="form-input" id="f_ed" placeholder="e.g. Accommodation deposit, Dinner, Taxi" value="${e.description||''}">
@@ -1985,7 +2025,7 @@ function openExpenseModal(destId, id) {
         <input class="form-input" id="f_edt" type="date" value="${e.date||td()}">
       </div>
     </div>
-    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:4px">
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px">
       <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:10px">Cost Splitting</div>
       <div class="fr2" style="margin-bottom:8px">
         <div class="form-group" style="margin-bottom:0">
@@ -2008,6 +2048,22 @@ function openExpenseModal(destId, id) {
         </span>
       </div>
     </div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px">
+      <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:10px">Payment</div>
+      <div class="fr2" style="margin-bottom:0">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Paid by</label>
+          <input class="form-input" id="f_epaidby" placeholder="e.g. Me, Sister, Mom" value="${paidBy}">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="opacity:0">_</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px">
+            <input type="checkbox" id="f_epaid" ${e.paid?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
+            <span style="font-size:.82rem;font-weight:500;color:var(--text)">Mark as Paid</span>
+          </label>
+        </div>
+      </div>
+    </div>
   `,()=>{
     const total = parseFloat(fv('f_ea'))||0;
     const split = parseInt(fv('f_esplit'))||1;
@@ -2017,11 +2073,13 @@ function openExpenseModal(destId, id) {
       totalAmount:total, splitPeople:split,
       amount:(total/split).toFixed(2),
       sharedWith:fv('f_eshared'),
+      paidBy:fv('f_epaidby')||'Me',
+      paid:document.getElementById('f_epaid')?.checked||false,
       date:fv('f_edt')
     };
     if(id){ const i=DB.expenses.findIndex(x=>x.id===id); DB.expenses[i]=obj; }
     else DB.expenses.push(obj);
-    save(); closeModal(); openDest(destId);
+    save(); closeModal(); openDest(destId, currentDestTab);
   });
 }
 
@@ -2043,7 +2101,7 @@ function openPackingModal(destId) {
   `,()=>{
     const items=fv('f_pi').split('\n').filter(Boolean).map(n=>({name:n.trim(),packed:false}));
     DB.packingLists.push({id:uid(),destId,name:fv('f_pn'),items});
-    save(); closeModal(); openDest(destId);
+    save(); closeModal(); openDest(destId, currentDestTab);
   });
 }
 
@@ -2056,7 +2114,7 @@ function openDocModal(destId) {
       </select></div>
     </div>
     <div class="form-group"><label class="form-label">Notes / Reference</label><textarea class="form-textarea" id="f_dno" rows="2" placeholder="Confirmation number, notes, reference..."></textarea></div>
-  `,()=>{ DB.documents.push({id:uid(),destId,title:fv('f_dtt'),type:fv('f_dtp'),notes:fv('f_dno')}); save(); closeModal(); openDest(destId); });
+  `,()=>{ DB.documents.push({id:uid(),destId,title:fv('f_dtt'),type:fv('f_dtp'),notes:fv('f_dno')}); save(); closeModal(); openDest(destId, currentDestTab); });
 }
 
 function openMemoryModal(destId) {
@@ -2076,7 +2134,7 @@ function openMemoryModal(destId) {
   `,()=>{
     const photos=[...document.querySelectorAll('#memPrev img')].map(i=>i.src);
     DB.memories.push({id:uid(),destId,title:fv('f_mt'),date:fv('f_md'),notes:fv('f_mn'),photos});
-    save(); closeModal(); openDest(destId);
+    save(); closeModal(); openDest(destId, currentDestTab);
   });
 }
 
@@ -2086,17 +2144,17 @@ function previewMemPhotos(inp) {
 
 function togglePack(listId,idx,val) {
   const pl=DB.packingLists.find(l=>l.id===listId);
-  if(pl){pl.items[idx].packed=val;save();openDest(currentDestId);}
+  if(pl){pl.items[idx].packed=val;save();openDest(currentDestId,currentDestTab);}
 }
 function addPackItem(listId,destId) {
   const inp=document.getElementById('pi_'+listId);
   if(!inp||!inp.value.trim()) return;
   const pl=DB.packingLists.find(l=>l.id===listId);
-  if(pl){pl.items.push({name:inp.value.trim(),packed:false});save();openDest(destId);}
+  if(pl){pl.items.push({name:inp.value.trim(),packed:false});save();openDest(destId,currentDestTab);}
 }
 function delPhoto(memId,pi,destId) {
   const m=DB.memories.find(x=>x.id===memId);
-  if(m){m.photos.splice(pi,1);save();openDest(destId);}
+  if(m){m.photos.splice(pi,1);save();openDest(destId,currentDestTab);}
 }
 
 // ══════════════════════════════════════════════
@@ -2491,11 +2549,12 @@ function openNutritionModal() {
 // ══════════════════════════════════════════════
 function renderBudget(c) {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
+  if(!DB.budgetSavings) DB.budgetSavings=[];
   const totalIncome   = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-  const totalLoans    = DB.budgetLoans.reduce((s,l)=>s+parseFloat(l.monthlyPayment||0),0);
   const totalRecurr   = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   const totalVar      = DB.budgetVarExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const totalOut      = totalLoans + totalRecurr + totalVar;
+  const totalSaved    = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.saved||0),0);
+  const totalOut      = totalRecurr + totalVar;
   const remaining     = totalIncome - totalOut;
   const remainingColor= remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2504,16 +2563,11 @@ function renderBudget(c) {
   ${pageStack.length?backBtn('Back'):''}
 
   <!-- SUMMARY CARDS -->
-  <div class="grid-4" style="margin-bottom:20px">
+  <div class="grid-3" style="margin-bottom:20px">
     <div class="card card-sm">
       <div class="stat-label">Monthly Income</div>
       <div class="stat-val" style="font-size:1.5rem;color:var(--green)">₱${fmt(totalIncome)}</div>
       <div class="stat-sub">${DB.budgetIncome.length} source${DB.budgetIncome.length!==1?'s':''}</div>
-    </div>
-    <div class="card card-sm">
-      <div class="stat-label">Loans</div>
-      <div class="stat-val" style="font-size:1.5rem;color:var(--amber)">₱${fmt(totalLoans)}</div>
-      <div class="stat-sub">${DB.budgetLoans.length} loan${DB.budgetLoans.length!==1?'s':''}</div>
     </div>
     <div class="card card-sm">
       <div class="stat-label">Recurring</div>
@@ -2535,29 +2589,27 @@ function renderBudget(c) {
     </div>
     <div style="height:12px;border-radius:8px;background:var(--border);overflow:hidden;display:flex">
       ${totalIncome>0?`
-        <div style="width:${Math.min(totalLoans/totalIncome*100,100)}%;background:var(--amber);transition:width .4s" title="Loans"></div>
-        <div style="width:${Math.min(totalRecurr/totalIncome*100,Math.max(0,100-totalLoans/totalIncome*100))}%;background:var(--blue);transition:width .4s" title="Recurring"></div>
-        <div style="width:${Math.min(totalVar/totalIncome*100,Math.max(0,100-(totalLoans+totalRecurr)/totalIncome*100))}%;background:var(--purple);transition:width .4s" title="Variable"></div>
-        <div style="flex:1;background:var(--green);opacity:.5" title="Remaining"></div>
+        <div style="width:${Math.min(totalRecurr/totalIncome*100,100)}%;background:var(--blue);border-radius:4px 0 0 4px;transition:width .4s" title="Recurring"></div>
+        <div style="width:${Math.min(totalVar/totalIncome*100,Math.max(0,100-totalRecurr/totalIncome*100))}%;background:var(--purple);transition:width .4s" title="Variable"></div>
+        <div style="flex:1;background:var(--green);opacity:.5;border-radius:0 4px 4px 0" title="Remaining"></div>
       `:'<div style="flex:1;background:var(--border);border-radius:8px"></div>'}
     </div>
     <div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap">
-      <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--amber);display:inline-block"></span>Loans</span>
       <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--blue);display:inline-block"></span>Recurring</span>
       <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--purple);display:inline-block"></span>Variable</span>
       <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Free</span>
     </div>
   </div>
 
-  <!-- TOP ROW: Income + Loans -->
+  <!-- TOP ROW: Income + Savings -->
   <div class="grid-2" style="align-items:start;margin-bottom:22px">
     <div>
       <div class="sec-head"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
       <div id="incomeList"></div>
     </div>
     <div>
-      <div class="sec-head"><div class="sec-title">🏦 Loans</div><button class="btn btn-primary btn-sm" onclick="openLoanModal()">+ Add</button></div>
-      <div id="loanList"></div>
+      <div class="sec-head"><div class="sec-title">🐷 Savings</div><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button></div>
+      <div id="savingsList"></div>
     </div>
   </div>
 
@@ -2591,7 +2643,7 @@ function renderBudget(c) {
   </div>`;
 
   fillIncomeList();
-  fillLoanList();
+  fillSavingsList();
   fillRecurringList();
   fillVarExpList();
 }
@@ -2622,43 +2674,70 @@ function fillIncomeList() {
     </div>`).join('');
 }
 
-function fillLoanList() {
-  const el = document.getElementById('loanList'); if(!el) return;
-  if(!DB.budgetLoans.length) {
-    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🏦</div><p>No loans added yet.</p></div>`;
+function fillSavingsList() {
+  if(!DB.budgetSavings) DB.budgetSavings=[];
+  const el = document.getElementById('savingsList'); if(!el) return;
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(!DB.budgetSavings.length) {
+    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🐷</div><p>No savings yet.<br>Set a target and track your progress.</p></div>`;
     return;
   }
-  el.innerHTML = DB.budgetLoans.map(l=>{
-    const paid = parseFloat(l.paid||0);
-    const total = parseFloat(l.totalAmount||0);
-    const pct = total>0 ? Math.min(100,Math.round(paid/total*100)) : 0;
+  el.innerHTML = DB.budgetSavings.map(g=>{
+    const saved = parseFloat(g.saved||0);
+    const target = parseFloat(g.target||0);
+    const pct = target>0 ? Math.min(100,Math.round(saved/target*100)) : 0;
     return `
-    <div class="card card-sm" style="margin-bottom:8px">
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${l.label}</div>
-          <div style="font-size:.7rem;color:var(--text-light)">${l.lender||''}</div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${g.label}</div>
+          <div style="font-size:.7rem;color:var(--text-light)">${g.notes||''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--amber)">$${parseFloat(l.monthlyPayment).toLocaleString('en',{minimumFractionDigits:2})}</div>
-          <div style="font-size:.65rem;color:var(--text-light)">/month</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">₱${fmt(saved)}</div>
+          ${target>0?`<div style="font-size:.65rem;color:var(--text-light)">of ₱${fmt(target)}</div>`:''}
         </div>
       </div>
-      ${total>0?`
+      ${target>0?`
         <div style="margin-top:8px">
           <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-light);margin-bottom:4px">
-            <span>Paid $${paid.toLocaleString('en',{minimumFractionDigits:2})}</span>
-            <span>of $${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            <span>${pct}% reached</span>
+            <span>₱${fmt(target-saved)} to go</span>
           </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:var(--green)"></div></div>
         </div>`:''}
-      ${l.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${l.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openLoanModal('${l.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delItem('budgetLoans','${l.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function openSavingsModal(id) {
+  if(!DB.budgetSavings) DB.budgetSavings=[];
+  const item = id ? DB.budgetSavings.find(x=>x.id===id)||{} : {};
+  openModal(id?'Edit Savings':'Add to Savings', `
+    <div class="form-group"><label class="form-label">Goal Name</label>
+      <input class="form-input" id="f_slabel" placeholder="e.g. Emergency Fund, Travel Fund, New Phone" value="${item.label||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Target Amount (₱)</label>
+        <input class="form-input" id="f_starget" type="number" step="0.01" placeholder="0.00" value="${item.target||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Amount Saved So Far (₱)</label>
+        <input class="form-input" id="f_ssaved" type="number" step="0.01" placeholder="0.00" value="${item.saved||''}">
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="What are you saving for? Timeline, strategy...">${item.notes||''}</textarea>
+    </div>
+  `, () => {
+    const obj = {id:id||uid(), label:fv('f_slabel'), target:fv('f_starget'), saved:fv('f_ssaved'), notes:fv('f_snotes')};
+    if(id) { const i=DB.budgetSavings.findIndex(x=>x.id===id); DB.budgetSavings[i]=obj; }
+    else DB.budgetSavings.push(obj);
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  });
 }
 
 function fillRecurringList() {
@@ -2692,7 +2771,11 @@ function fillRecurringList() {
           </div>
       </div>
       ${b.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${b.notes}</div>`:''}
-      <div style="display:flex;gap:5px;margin-top:8px">
+      <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
+        ${b.paid
+          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleBillPaid('${b.id}')">✓ Paid</span>`
+          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleBillPaid('${b.id}')">Unpaid</span>`
+        }
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openRecurringModal('${b.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetBills','${b.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
@@ -2731,7 +2814,11 @@ function fillVarExpList() {
           </div>
       </div>
       ${e.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${e.notes}</div>`:''}
-      <div style="display:flex;gap:5px;margin-top:8px">
+      <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
+        ${e.paid
+          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">✓ Paid</span>`
+          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">Unpaid</span>`
+        }
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openVarExpModal('${e.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
@@ -2820,24 +2907,19 @@ function openRecurringModal(id) {
       <input class="form-input" id="f_rlabel" placeholder="e.g. Electricity, Rent, Netflix" value="${item.label||''}">
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Amount (₱)</label>
-        <input class="form-input" id="f_ramt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
-      </div>
       <div class="form-group"><label class="form-label">Category</label>
         <select class="form-select" id="f_rcat">
-          ${['Rent/Mortgage','Electricity','Water','Internet','Gas','Subscriptions','Insurance','Phone','Transport','Education','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
+          ${['Rent/Mortgage','Electricity','Water','Internet','Gas','Subscriptions','Insurance','Phone','Transport','Loan Payment','Education','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>
-    </div>
-    <div class="fr2">
       <div class="form-group"><label class="form-label">Frequency</label>
         <select class="form-select" id="f_rfreq">
           ${['Monthly','Weekly','Fortnightly','Quarterly','Annually'].map(t=>`<option${item.frequency===t?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Due Day of Month</label>
-        <input class="form-input" id="f_rdueday" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.dueDay||''}">
-      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Due Day of Month</label>
+      <input class="form-input" id="f_rdueday" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.dueDay||''}">
     </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
       <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:8px">Cost Splitting</div>
@@ -2860,8 +2942,17 @@ function openRecurringModal(id) {
         <span id="rec_split_val" style="font-family:var(--font-display);font-size:1.1rem;color:var(--accent)">${(item.splitPeople&&item.splitPeople>1)?'₱'+(parseFloat(item.totalAmount||item.amount||0)/parseInt(item.splitPeople)).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}</span>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label>
-      <textarea class="form-textarea" id="f_rnotes" rows="2" placeholder="Account number, provider, auto-debit info...">${item.notes||''}</textarea>
+    <div class="fr2" style="margin-bottom:4px">
+      <div class="form-group"><label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="f_rnotes" rows="2" placeholder="Account number, provider, auto-debit info...">${item.notes||''}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment Status</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
+          <input type="checkbox" id="f_rpaid" ${item.paid?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
+          <span style="font-size:.82rem;font-weight:500;color:var(--text)">Mark as Paid this month</span>
+        </label>
+      </div>
     </div>
   `, () => {
     const rTotal = parseFloat(fv('f_rtotal'))||0;
@@ -2871,6 +2962,7 @@ function openRecurringModal(id) {
       totalAmount:rTotal, splitPeople:rSplit,
       amount:(rTotal/rSplit).toFixed(2),
       sharedWith:fv('f_rshared'),
+      paid:document.getElementById('f_rpaid')?.checked||false,
       category:fv('f_rcat'), frequency:fv('f_rfreq'),
       dueDay:fv('f_rdueday'), notes:fv('f_rnotes')
     };
@@ -2884,23 +2976,20 @@ function openVarExpModal(id) {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
   const item = id ? DB.budgetVarExp.find(x=>x.id===id)||{} : {};
   openModal(id?'Edit Variable Expense':'Add Variable Expense', `
-    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Occasional or one-off costs — dining out, shared bills, spontaneous purchases. Great for tracking your share of split expenses.</p>
+    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Occasional or one-off costs — dining out, shared bills, spontaneous purchases.</p>
     <div class="form-group"><label class="form-label">Description</label>
       <input class="form-input" id="f_vlabel" placeholder="e.g. Dinner at Jollibee, Sister's shared bill" value="${item.label||''}">
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">My Share (₱)</label>
-        <input class="form-input" id="f_vamt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="f_vcat">
+          ${['Food & Dining','Shopping','Entertainment','Transport','Loan Payment','Health','Beauty & Care','Groceries','Family','Travel','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
+        </select>
       </div>
       <div class="form-group"><label class="form-label">Date</label>
         <input class="form-input" id="f_vdate" type="date" value="${item.date||td()}">
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Category</label>
-        <select class="form-select" id="f_vcat">
-          ${['Food & Dining','Shopping','Entertainment','Transport','Health','Beauty & Care','Groceries','Family','Travel','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
-        </select>
-      </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
       <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:8px">Cost Splitting</div>
       <div class="fr2" style="margin-bottom:6px">
@@ -2922,8 +3011,17 @@ function openVarExpModal(id) {
         <span id="var_split_val" style="font-family:var(--font-display);font-size:1.1rem;color:var(--accent)">${(item.splitPeople&&item.splitPeople>1)?'₱'+(parseFloat(item.totalAmount||item.amount||0)/parseInt(item.splitPeople)).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}</span>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label>
-      <textarea class="form-textarea" id="f_vnotes" rows="2" placeholder="What was it for? Any context to remember...">${item.notes||''}</textarea>
+    <div class="fr2" style="margin-bottom:4px">
+      <div class="form-group"><label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="f_vnotes" rows="2" placeholder="What was it for? Any context to remember...">${item.notes||''}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment Status</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
+          <input type="checkbox" id="f_vpaid" ${item.paid?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
+          <span style="font-size:.82rem;font-weight:500;color:var(--text)">Mark as Paid</span>
+        </label>
+      </div>
     </div>
   `, () => {
     const vTotal = parseFloat(fv('f_vtotal'))||0;
@@ -2932,6 +3030,7 @@ function openVarExpModal(id) {
       id:id||uid(), label:fv('f_vlabel'),
       totalAmount:vTotal, splitPeople:vSplit,
       amount:(vTotal/vSplit).toFixed(2),
+      paid:document.getElementById('f_vpaid')?.checked||false,
       date:fv('f_vdate'), category:fv('f_vcat'),
       sharedWith:fv('f_vshared'), notes:fv('f_vnotes')
     };
@@ -2939,6 +3038,16 @@ function openVarExpModal(id) {
     else DB.budgetVarExp.push(obj);
     save(); closeModal(); renderBudget(document.getElementById('content'));
   });
+}
+
+function toggleBillPaid(id) {
+  const b = DB.budgetBills.find(x=>x.id===id);
+  if(b){ b.paid=!b.paid; save(); renderBudget(document.getElementById('content')); }
+}
+function toggleVarPaid(id) {
+  if(!DB.budgetVarExp) return;
+  const e = DB.budgetVarExp.find(x=>x.id===id);
+  if(e){ e.paid=!e.paid; save(); renderBudget(document.getElementById('content')); }
 }
 
 function openBudgetQuickAdd() {
