@@ -568,7 +568,7 @@ function migrateDB(db) {
 //    );
 //    insert into lulu_data (id, data) values ('main', '{}');
 // 3. Go to Settings → API and copy your URL + anon key below:
-const SUPA_URL = 'https://dxxoxcplklycsqvdvbqo.supabase.co/rest/v1/';
+const SUPA_URL = 'https://dxxoxcplklycsqvdvbqo.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eG94Y3Bsa2x5Y3NxdmR2YnFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTk4NDMsImV4cCI6MjA5NzAzNTg0M30.FQbit5LlzEkNPJm4v2gewIn5LWB4pSSp69Cmrt1_Gt4';
 const SK = 'byherhub_v2_local';
 
@@ -664,16 +664,34 @@ function save() {
 
 async function initDB() {
   if(!cloudEnabled) return;
-  showSyncStatus('saving');
+
+  // Show loading overlay while fetching cloud data
+  const loader = document.createElement('div');
+  loader.id = 'cloudLoader';
+  loader.style.cssText = 'position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  loader.innerHTML = `
+    <div style="font-family:var(--font-display);font-size:1.6rem;font-style:italic;color:var(--accent)">Lulu</div>
+    <div style="font-size:.75rem;color:var(--text-light);letter-spacing:.15em;text-transform:uppercase">Loading your data...</div>
+    <div style="width:40px;height:3px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:4px">
+      <div style="height:100%;background:var(--accent);border-radius:3px;animation:loadBar 1.2s ease-in-out infinite"></div>
+    </div>
+    <style>@keyframes loadBar{0%{width:0%;margin-left:0}50%{width:100%;margin-left:0}100%{width:0%;margin-left:100%}}</style>`;
+  document.body.appendChild(loader);
+
   const cloud = await loadFromCloud();
+
+  // Remove loader
+  loader.remove();
+
   if(cloud && Object.keys(cloud).length > 0) {
     DB = migrateDB(cloud);
     try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e){}
     showSyncStatus('saved');
   } else {
-    // First load — push local data up to Supabase
+    // No cloud data yet — push local data up
     await saveToCloud(DB);
   }
+
   ensureBuiltin();
   updateBadges();
   go('dashboard', document.getElementById('nav_dashboard'), false);
