@@ -674,7 +674,7 @@ function save() {
 }
 
 async function initDB() {
-  if(!cloudEnabled) return;
+  if(!cloudEnabled) return Promise.resolve();
 
   // Show loading overlay while fetching cloud data
   const loader = document.createElement('div');
@@ -732,6 +732,14 @@ const PAGE_META = {
 function go(page, navEl, pushStack=true) {
   if(pushStack && currentPage !== page) pageStack.push(currentPage);
   currentPage = page;
+  // Persist current page/context for refresh restore
+  try {
+    sessionStorage.setItem('lulu_page', page);
+    if(page==='destination_detail') sessionStorage.setItem('lulu_destId', currentDestId||'');
+    if(page==='program_detail') sessionStorage.setItem('lulu_progId', currentProgId||'');
+    sessionStorage.setItem('lulu_destTab', currentDestTab||0);
+    sessionStorage.setItem('lulu_last', Date.now());
+  } catch(e){}
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
   const navMap = {dashboard:'nav_dashboard',calendar:'nav_calendar',destinations:'nav_destinations',destination_detail:'nav_destinations',programs:'nav_programs',program_detail:'nav_programs',log:'nav_log',nutrition:'nav_nutrition',budget:'nav_budget'};
   const target = document.getElementById(navMap[page]);
@@ -3305,6 +3313,7 @@ function enterApp() {
   const splash = document.getElementById('splash');
   splash.classList.add('hide');
   setTimeout(() => { splash.style.display = 'none'; }, 550);
+  try { sessionStorage.setItem('lulu_last', Date.now()); } catch(e){}
 }
 
 // ══════════════════════════════════════════════
@@ -3322,13 +3331,77 @@ document.addEventListener('click', function(e) {
 });
 
 // ══════════════════════════════════════════════
-// INIT
+// IDLE TIMEOUT — 10 minutes
+// ══════════════════════════════════════════════
+const IDLE_MS = 10 * 60 * 1000; // 10 minutes
+
+// Reset idle timer on any user interaction
+let idleTimer = null;
+function resetIdle() {
+  try { sessionStorage.setItem('lulu_last', Date.now()); } catch(e){}
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(()=>{
+    // Show splash after 10 min idle
+    try { sessionStorage.removeItem('lulu_last'); } catch(e){}
+    const splash = document.getElementById('splash');
+    if(splash) { splash.style.display='flex'; splash.classList.remove('hide'); }
+  }, IDLE_MS);
+}
+['click','touchstart','keydown','scroll','mousemove'].forEach(ev=>{
+  document.addEventListener(ev, resetIdle, {passive:true});
+});
+
+// ══════════════════════════════════════════════
+// INIT — restore last page or show splash
 // ══════════════════════════════════════════════
 ensureBuiltin();
 updateBadges();
-go('dashboard', document.getElementById('nav_dashboard'), false);
-// Load from cloud if configured (will re-render when done)
-if(cloudEnabled) initDB();
+
+function restorePage() {
+  try {
+    const lastActivity = parseInt(sessionStorage.getItem('lulu_last')||'0');
+    const page = sessionStorage.getItem('lulu_page');
+    const now = Date.now();
+
+    // If inactive for more than 10 min OR no session, show splash
+    if(!page || !lastActivity || (now - lastActivity) > IDLE_MS) {
+      go('dashboard', document.getElementById('nav_dashboard'), false);
+      // Show splash (new visit or timed out)
+      const splash = document.getElementById('splash');
+      if(splash && (!lastActivity || (now - lastActivity) > IDLE_MS)) {
+        splash.style.display = 'flex';
+        splash.classList.remove('hide');
+      }
+      return;
+    }
+
+    // Restore context
+    const savedDestId = sessionStorage.getItem('lulu_destId');
+    const savedProgId = sessionStorage.getItem('lulu_progId');
+    const savedTab    = parseInt(sessionStorage.getItem('lulu_destTab')||'0');
+
+    if(savedDestId) currentDestId = savedDestId;
+    if(savedProgId) currentProgId = savedProgId;
+    currentDestTab = savedTab;
+
+    // Hide splash — user is returning within 10 min
+    const splash = document.getElementById('splash');
+    if(splash) { splash.style.display = 'none'; }
+
+    go(page, document.getElementById('nav_'+(page==='destination_detail'?'destinations':page==='program_detail'?'programs':page)), false);
+
+  } catch(e) {
+    go('dashboard', document.getElementById('nav_dashboard'), false);
+  }
+}
+
+// Load from cloud if configured, then restore page
+if(cloudEnabled) {
+  initDB().then(()=>{ restorePage(); resetIdle(); });
+} else {
+  restorePage();
+  resetIdle();
+}
 </script>
 </body>
 </html>
