@@ -3156,14 +3156,14 @@ function renderBudget(c) {
   </div>
 
   <!-- TOP ROW: Income + Savings -->
-  <div class="grid-2" style="align-items:stretch;margin-bottom:22px">
-    <div style="display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px">
+    <div style="background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
       <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
-      <div id="incomeList" style="flex:1"></div>
+      <div id="incomeList"></div>
     </div>
-    <div style="display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
+    <div style="background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
       <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button></div>
-      <div id="savingsList" style="flex:1"></div>
+      <div id="savingsList"></div>
     </div>
   </div>
 
@@ -3239,7 +3239,7 @@ function fillIncomeList() {
       ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:600;margin-top:6px">${i.day1} · ₱${fmt(i.amt1)}</span>`
       : '';
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:90px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:110px">
       <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${i.type||'Income'}</div>
@@ -3302,11 +3302,12 @@ function fillSavingsList() {
       }
     } catch(e){}
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:90px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:110px">
       <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||'Savings'}</div>
           <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${dateLabel}</div>
+          <div style="height:26px"></div><!-- spacer matches income chip height -->
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green)">₱${fmt(g.amount)}</div>
@@ -3367,7 +3368,12 @@ function fillRecurringList() {
   const el = document.getElementById('recurringList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const filterVal = document.getElementById('recurFilter')?.value||'';
-  let bills = DB.budgetBills;
+  // Paid status is per-month
+  const billsWithMonthPaid = DB.budgetBills.map(b=>({
+    ...b,
+    paid: !!(b.paidMonths && b.paidMonths[budgetMonth])
+  }));
+  let bills = billsWithMonthPaid;
   if(filterVal==='paid')   bills = bills.filter(b=>b.paid);
   if(filterVal==='unpaid') bills = bills.filter(b=>!b.paid);
   if(!bills.length) {
@@ -3705,7 +3711,7 @@ function openRecurringModal(id) {
       <div class="form-group">
         <label class="form-label">Payment Status</label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
-          <input type="checkbox" id="f_rpaid" ${item.paid?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
+          <input type="checkbox" id="f_rpaid" ${(item.paidMonths&&item.paidMonths[budgetMonth])?'checked':''} style="accent-color:var(--green);width:16px;height:16px">
           <span style="font-size:.82rem;font-weight:500;color:var(--text)">Mark as Paid this month</span>
         </label>
       </div>
@@ -3718,7 +3724,8 @@ function openRecurringModal(id) {
       totalAmount:rTotal, splitPeople:rSplit,
       amount:(rTotal/rSplit).toFixed(2),
       sharedWith:fv('f_rshared'),
-      paid:document.getElementById('f_rpaid')?.checked||false,
+      paidMonths: (()=>{ const pm = {...(item.paidMonths||{})}; pm[budgetMonth]=document.getElementById('f_rpaid')?.checked||false; return pm; })(),
+      paid: document.getElementById('f_rpaid')?.checked||false,
       category:fv('f_rcat'), frequency:fv('f_rfreq'),
       dueDay:fv('f_rdueday'), notes:fv('f_rnotes')
     };
@@ -3798,7 +3805,12 @@ function openVarExpModal(id) {
 
 function toggleBillPaid(id) {
   const b = DB.budgetBills.find(x=>x.id===id);
-  if(b){ b.paid=!b.paid; save(); renderBudget(document.getElementById('content')); }
+  if(!b) return;
+  if(!b.paidMonths) b.paidMonths = {};
+  b.paidMonths[budgetMonth] = !b.paidMonths[budgetMonth];
+  // keep legacy b.paid in sync for the current month only
+  b.paid = !!b.paidMonths[budgetMonth];
+  save(); renderBudget(document.getElementById('content'));
 }
 function toggleVarPaid(id) {
   if(!DB.budgetVarExp) return;
