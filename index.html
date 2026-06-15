@@ -3148,7 +3148,7 @@ function fillIncomeList() {
     if(i.paySchedule==='split') {
       schedDetail = `
         <div style="margin-top:6px;display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:5px 10px">
-          <span style="font-size:.65rem;color:var(--text-light)">Day ${i.day1||15}</span>
+          <span style="font-size:.65rem;color:var(--text-light)">${i.day1||''}</span>
           <span style="font-size:.82rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</span>
         </div>`;
     }
@@ -3361,14 +3361,11 @@ function openIncomeModal(id) {
 
     <!-- BI-MONTHLY: single payday dropdown + amount -->
     <div id="inc_split" style="display:${schedule==='split'||!id?'block':'none'}">
-      <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">Select a payday and enter the amount received. Add both the 15th and 30th entries separately.</div>
+      <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">Enter the date you receive this payment and the amount.</div>
       <div class="fr2">
         <div class="form-group">
-          <label class="form-label">Payday</label>
-          <select class="form-select" id="f_iday1">
-            <option value="15" ${(item.day1||'15')==='15'?'selected':''}>15th</option>
-            <option value="30" ${item.day1==='30'?'selected':''}>30th</option>
-          </select>
+          <label class="form-label">Payday Date</label>
+          <input class="form-input" id="f_iday1" type="date" value="${item.day1||''}">
         </div>
         <div class="form-group">
           <label class="form-label">Amount (₱)</label>
@@ -3379,7 +3376,7 @@ function openIncomeModal(id) {
         <span>Amount entered</span>
         <span style="font-family:var(--font-display);color:var(--green);font-size:1rem">₱${(parseFloat(item.amt1)||0).toLocaleString('en',{minimumFractionDigits:2})}</span>
       </div>
-      <div style="font-size:.7rem;color:var(--text-light);margin-top:8px">💡 Add a separate entry for the other payday (e.g. if this is the 15th, add another for the 30th).</div>
+      <div style="font-size:.7rem;color:var(--text-light);margin-top:8px">💡 Add a separate entry for your other payday.</div>
     </div>
 
     <!-- BIWEEKLY / WEEKLY -->
