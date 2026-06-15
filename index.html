@@ -2997,10 +2997,40 @@ function renderBudget(c) {
   const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
   const totalSaved  = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
 
-  // ── Carryover: look up stored balance from previous month (set by migrateDB on month rollover) ──
+  // ── Carryover: live computation of prior months' cumulative net ──
   if(!DB.budgetCarryover) DB.budgetCarryover = {};
-  // Just use whatever was stored for this month — computed once by migrateDB at month rollover
-  const carryover = parseFloat(DB.budgetCarryover[budgetMonth] || 0);
+
+  function prevYM(ym) {
+    const [y,m] = ym.split('-').map(Number);
+    return m===1 ? (y-1)+'-12' : y+'-'+String(m-1).padStart(2,'0');
+  }
+
+  // Find the earliest month that has any variable expense data
+  const allVarMonths = [...new Set(
+    DB.budgetVarExp.map(e=>(e.date||'').slice(0,7)).filter(Boolean)
+  )].sort();
+  const earliestMonth = allVarMonths[0] || budgetMonth;
+
+  // Accumulate net from earliestMonth up to (but not including) budgetMonth
+  function computeCarryover(targetYM) {
+    let carry = 0;
+    let cur = earliestMonth;
+    // walk forward month by month until we reach targetYM
+    while(cur < targetYM) {
+      const inc = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+      const rec = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+      const varExp = DB.budgetVarExp
+        .filter(e=>(e.date||'').slice(0,7)===cur)
+        .reduce((s,e)=>s+parseFloat(e.amount||0),0);
+      carry += inc - rec - varExp;
+      // advance one month
+      const [y,m] = cur.split('-').map(Number);
+      cur = m===12 ? (y+1)+'-01' : y+'-'+String(m+1).padStart(2,'0');
+    }
+    return carry;
+  }
+
+  const carryover = computeCarryover(budgetMonth);
 
   const totalOut    = totalRecurr + totalVar;
   const remaining   = totalIncome + carryover - totalOut;
