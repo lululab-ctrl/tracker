@@ -2972,6 +2972,7 @@ let budgetMonth = (()=>{
 })(); // 'YYYY-MM' in local time
 
 function renderBudget(c) {
+  try {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
   if(!DB.budgetSavings) DB.budgetSavings=[];
 
@@ -3019,7 +3020,7 @@ function renderBudget(c) {
     <select class="form-select" id="budgetMonthPicker" style="width:200px;font-size:.82rem;font-weight:500" onchange="budgetMonth=this.value;renderBudget(document.getElementById('content'))">
       ${monthOptions.map(m=>`<option value="${m.val}"${m.val===budgetMonth?' selected':''}>${m.label}</option>`).join('')}
     </select>
-    ${budgetMonth !== nowYM2 ? `<button class="btn btn-ghost btn-sm" onclick="budgetMonth='${now.toISOString().slice(0,7)}';renderBudget(document.getElementById('content'))">Back to current month</button>` : ''}
+    ${budgetMonth !== nowYM2 ? `<button class="btn btn-ghost btn-sm" onclick="budgetMonth='${nowYM2}';renderBudget(document.getElementById('content'))">Back to current month</button>` : ''}
   </div>
 
   <!-- SUMMARY CARDS -->
@@ -3049,7 +3050,7 @@ function renderBudget(c) {
         <div style="font-size:.72rem;color:var(--text-light);margin-top:2px">Running balance based on all entries</div>
       </div>
       <div style="font-family:var(--font-display);font-size:2rem;color:${remaining>=0?'var(--green)':'var(--red)'}">
-        ₱${Math.abs(remaining).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}${remaining<0?' (deficit)':''}
+        ${remaining>=0?'+':'−'}₱${Math.abs(remaining).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -3113,13 +3114,13 @@ function renderBudget(c) {
 
   <!-- TOP ROW: Income + Savings -->
   <div class="grid-2" style="align-items:stretch;margin-bottom:22px">
-    <div>
-      <div class="sec-head"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
-      <div id="incomeList"></div>
+    <div style="display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
+      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
+      <div id="incomeList" style="flex:1"></div>
     </div>
-    <div>
-      <div class="sec-head"><div class="sec-title">🐷 Savings</div><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button></div>
-      <div id="savingsList"></div>
+    <div style="display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
+      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button></div>
+      <div id="savingsList" style="flex:1"></div>
     </div>
   </div>
 
@@ -3170,6 +3171,10 @@ function renderBudget(c) {
   fillSavingsList();
   fillRecurringList();
   fillVarExpList();
+  } catch(err) {
+    console.error('renderBudget error:', err);
+    c.innerHTML += `<div style="padding:20px;color:var(--red);font-size:.8rem;background:var(--red-bg);border-radius:var(--radius);margin-top:12px">⚠ Error rendering budget: ${err.message}</div>`;
+  }
 }
 
 function fillIncomeList() {
@@ -3199,7 +3204,7 @@ function fillIncomeList() {
         </div>`;
     }
     return `
-    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
+    <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.type||'Income'}</div>
@@ -3216,7 +3221,7 @@ function fillIncomeList() {
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openIncomeModal('${i.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`;
+    </div>`; /* end income card */
   }
   incomeVisible.forEach(i=>{ el.innerHTML += renderIncomeCard(i); });
   if(incomeHidden.length) {
@@ -3257,7 +3262,7 @@ function fillSavingsList() {
       <span style="font-weight:600;color:var(--green)">Total saved: ₱${fmt(total)}</span>
     </div>`;
   function savCard(g){ return `
-    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
+    <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.7rem;color:var(--text-light)">${g.date||''}</div>
