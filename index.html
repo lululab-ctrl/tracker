@@ -554,6 +554,15 @@ function migrateDB(db) {
     workoutLogs:[],goals:[],nutrition:[],calEvents:[],budgetIncome:[],budgetLoans:[],budgetBills:[],budgetVarExp:[],budgetSavings:[]
   };
   Object.keys(defaults).forEach(k=>{ if(!Array.isArray(db[k])) db[k]=defaults[k]; });
+  // Sync paid/paidBy from bookings to their linked expenses
+  if(db.bookings && db.expenses) {
+    db.bookings.forEach(b=>{
+      if(b._expId) {
+        const exp = db.expenses.find(x=>x.id===b._expId);
+        if(exp) { exp.paid = b.paid||false; exp.paidBy = b.paidBy||'Me'; }
+      }
+    });
+  }
   return db;
 }
 
@@ -1669,6 +1678,8 @@ function fillDestBudget(exps, destId, payerFilter, paidFilter) {
       amount: parseFloat(b.amount),
       totalAmount: parseFloat(b.totalAmount||b.amount),
       splitPeople: b.splitPeople||1,
+      paidBy: b.paidBy||'Me',
+      paid: b.paid||false,
       date: b.date,
       type: b.type
     }));
@@ -1968,14 +1979,14 @@ function openBookingModal(id, destId) {
       const oldB = DB.bookings[i];
       if(oldB._expId) {
         const ei = DB.expenses.findIndex(x=>x.id===oldB._expId);
-        if(ei>-1) DB.expenses[ei]={...DB.expenses[ei],description:obj.name,amount:obj.amount,date:obj.date};
+        if(ei>-1) DB.expenses[ei]={...DB.expenses[ei],description:obj.name,amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,paidBy:obj.paidBy,paid:obj.paid,date:obj.date};
       }
       DB.bookings[i]={...obj,_expId:oldB._expId};
     } else {
       // auto-create expense entry in destination budget
       const expId = uid();
       const typeToCategory = {Flight:'Flights',Accommodation:'Accommodation',Train:'Transport',Ferry:'Transport',Bus:'Transport',Tour:'Activities',Restaurant:'Food',Other:'Other'};
-      DB.expenses.push({id:expId,destId:dId,description:obj.name,category:typeToCategory[obj.type]||'Other',amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,paidBy:obj.paidBy,date:obj.date,_fromBooking:true});
+      DB.expenses.push({id:expId,destId:dId,description:obj.name,category:typeToCategory[obj.type]||'Other',amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,paidBy:obj.paidBy,paid:obj.paid||false,date:obj.date,_fromBooking:true});
       obj._expId = expId;
       DB.bookings.push(obj);
     }
