@@ -3055,24 +3055,38 @@ function renderBudget(c) {
 
     <!-- RECURRING EXPENSES -->
     <div>
-      <div class="sec-head">
+      <div class="sec-head" style="flex-wrap:wrap;gap:6px">
         <div>
           <div class="sec-title">🔁 Recurring Expenses</div>
           <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Fixed bills every month — rent, utilities, subscriptions</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ Add</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <select class="form-select" id="recurFilter" style="width:110px;font-size:.72rem" onchange="fillRecurringList()">
+            <option value="">All</option>
+            <option value="paid">Paid ✓</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ Add</button>
+        </div>
       </div>
       <div id="recurringList"></div>
     </div>
 
     <!-- VARIABLE EXPENSES -->
     <div>
-      <div class="sec-head">
+      <div class="sec-head" style="flex-wrap:wrap;gap:6px">
         <div>
           <div class="sec-title">📌 Variable Expenses</div>
           <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Occasional costs — dining out, shared bills, one-time purchases</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="openVarExpModal()">+ Add</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <select class="form-select" id="varFilter" style="width:110px;font-size:.72rem" onchange="fillVarExpList()">
+            <option value="">All</option>
+            <option value="paid">Paid ✓</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openVarExpModal()">+ Add</button>
+        </div>
       </div>
       <div id="varExpList"></div>
     </div>
@@ -3182,17 +3196,21 @@ function openSavingsModal(id) {
 function fillRecurringList() {
   const el = document.getElementById('recurringList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(!DB.budgetBills.length) {
-    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">🔁</div><p style="font-size:.8rem">No recurring expenses yet.<br>Add rent, electricity, water, subscriptions...</p></div>`;
+  const filterVal = document.getElementById('recurFilter')?.value||'';
+  let bills = DB.budgetBills;
+  if(filterVal==='paid')   bills = bills.filter(b=>b.paid);
+  if(filterVal==='unpaid') bills = bills.filter(b=>!b.paid);
+  if(!bills.length) {
+    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">🔁</div><p style="font-size:.8rem">${DB.budgetBills.length?'No items match the filter.':'No recurring expenses yet.<br>Add rent, electricity, water, subscriptions...'}</p></div>`;
     return;
   }
-  const total = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+  const total = bills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${DB.budgetBills.length} item${DB.budgetBills.length!==1?'s':''}</span>
+      <span>${bills.length} item${bills.length!==1?'s':''}</span>
       <span style="font-weight:600;color:var(--blue)">Total: ₱${fmt(total)}/mo</span>
     </div>` +
-  DB.budgetBills.map(b=>`
+  bills.map(b=>`
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--blue)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
@@ -3225,11 +3243,14 @@ function fillVarExpList() {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
   const el = document.getElementById('varExpList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(!DB.budgetVarExp.length) {
-    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">No variable expenses yet.<br>Record dining out, shared bills, one-off purchases...</p></div>`;
+  const filterVal = document.getElementById('varFilter')?.value||'';
+  let sorted = [...DB.budgetVarExp].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(filterVal==='paid')   sorted = sorted.filter(e=>e.paid);
+  if(filterVal==='unpaid') sorted = sorted.filter(e=>!e.paid);
+  if(!sorted.length) {
+    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">${DB.budgetVarExp.length?'No items match the filter.':'No variable expenses yet.<br>Record dining out, shared bills, one-off purchases...'}</p></div>`;
     return;
   }
-  const sorted = [...DB.budgetVarExp].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
@@ -3517,7 +3538,7 @@ function openVarExpModal(id) {
     <div class="fr2">
       <div class="form-group"><label class="form-label">Category</label>
         <select class="form-select" id="f_vcat">
-          ${['Food & Dining','Shopping','Entertainment','Transport','Loan Payment','Health','Beauty & Care','Groceries','Family','Travel','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
+          ${['Food & Dining','Shopping','Entertainment','Transport','Loan Payment','Health','Beauty & Care','Groceries','Utilities','Family','Travel','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Date</label>
