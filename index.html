@@ -487,6 +487,8 @@ tr:hover td{background:var(--surface2)}
     <div class="sb-item" id="nav_programs" onclick="go('programs',this)"><span class="sb-icon">◈</span><span class="sb-label">Programs</span></div>
     <div class="sb-item" id="nav_log" onclick="go('log',this)"><span class="sb-icon">◫</span><span class="sb-label">Training Log</span></div>
     <div class="sb-item" id="nav_nutrition" onclick="go('nutrition',this)"><span class="sb-icon">◻</span><span class="sb-label">Nutrition</span></div>
+    <div class="sb-section">Finance</div>
+    <div class="sb-item" id="nav_budget" onclick="go('budget',this)"><span class="sb-icon">◎</span><span class="sb-label">Budget Tracker</span></div>
   </nav>
   <div class="sb-bottom">
     <div class="sb-item" onclick="exportData()"><span class="sb-icon">↓</span><span class="sb-label">Export Backup</span></div>
@@ -549,7 +551,7 @@ function migrateDB(db) {
   const defaults = {
     destinations:[],bookings:[],expenses:[],packingLists:[],
     memories:[],documents:[],itineraries:[],programs:[],
-    workoutLogs:[],goals:[],nutrition:[],calEvents:[]
+    workoutLogs:[],goals:[],nutrition:[],calEvents:[],budgetIncome:[],budgetLoans:[],budgetBills:[],budgetVarExp:[]
   };
   Object.keys(defaults).forEach(k=>{ if(!Array.isArray(db[k])) db[k]=defaults[k]; });
   return db;
@@ -644,7 +646,7 @@ function showSyncStatus(state) {
 const EMPTY_DB = {
   destinations:[], bookings:[], expenses:[], packingLists:[],
   memories:[], documents:[], itineraries:[], programs:[],
-  workoutLogs:[], goals:[], nutrition:[], calEvents:[],
+  workoutLogs:[], goals:[], nutrition:[], calEvents:[], budgetIncome:[], budgetLoans:[], budgetBills:[], budgetVarExp:[],
 };
 
 let DB = (() => {
@@ -715,13 +717,14 @@ const PAGE_META = {
   program_detail:{title:'',bread:'Fitness → Programs → '},
   log:{title:'Training Log',bread:'Fitness → Log'},
   nutrition:{title:'Nutrition',bread:'Fitness → Nutrition'},
+  budget:{title:'Budget Tracker',bread:'Finance → Budget'},
 };
 
 function go(page, navEl, pushStack=true) {
   if(pushStack && currentPage !== page) pageStack.push(currentPage);
   currentPage = page;
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
-  const navMap = {dashboard:'nav_dashboard',calendar:'nav_calendar',destinations:'nav_destinations',destination_detail:'nav_destinations',programs:'nav_programs',program_detail:'nav_programs',log:'nav_log',nutrition:'nav_nutrition'};
+  const navMap = {dashboard:'nav_dashboard',calendar:'nav_calendar',destinations:'nav_destinations',destination_detail:'nav_destinations',programs:'nav_programs',program_detail:'nav_programs',log:'nav_log',nutrition:'nav_nutrition',budget:'nav_budget'};
   const target = document.getElementById(navMap[page]);
   if(target) target.classList.add('active');
   const meta = PAGE_META[page]||{title:page,bread:'Lulu'};
@@ -738,12 +741,12 @@ function go(page, navEl, pushStack=true) {
   document.getElementById('tbTitle').textContent = title;
   document.getElementById('tbBread').textContent = bread;
   // Show back button when not on root pages
-  const rootPages = ['dashboard','calendar','destinations','programs','log','nutrition'];
+  const rootPages = ['dashboard','calendar','destinations','programs','log','nutrition','budget'];
   const backBtn = document.getElementById('tbBackBtn');
   if(backBtn) backBtn.style.display = (pageStack.length > 0 && !rootPages.includes(page)) ? 'flex' : 'none';
   // Hide + Add button on detail pages where it's not needed
   const addBtn = document.getElementById('addBtn');
-  if(addBtn) addBtn.style.display = ['destination_detail','program_detail','dashboard'].includes(page) ? 'none' : '';
+  if(addBtn) addBtn.style.display = ['destination_detail','program_detail','dashboard','budget'].includes(page) ? 'none' : '';
 
   updateBadges();
   render(page);
@@ -791,6 +794,7 @@ function handleAdd() {
     program_detail: ()=>openAddDayModal(currentProgId),
     log: ()=>openLogModal(),
     nutrition: ()=>openNutritionModal(),
+    budget: ()=>openBudgetQuickAdd(),
     calendar: ()=>openCalEventModal(),
   };
   (map[currentPage]||map.dashboard)();
@@ -820,7 +824,7 @@ function handleSearch(q) {
 function render(page) {
   const c = document.getElementById('content');
   c.innerHTML='';
-  ({dashboard:renderDashboard,calendar:renderCalendar,destinations:renderDestinations,destination_detail:renderDestDetail,programs:renderPrograms,program_detail:renderProgDetail,log:renderLog,nutrition:renderNutrition}[page]||renderDashboard)(c);
+  ({dashboard:renderDashboard,calendar:renderCalendar,destinations:renderDestinations,destination_detail:renderDestDetail,programs:renderPrograms,program_detail:renderProgDetail,log:renderLog,nutrition:renderNutrition,budget:renderBudget}[page]||renderDashboard)(c);
 }
 
 function backBtn(label) {
@@ -863,7 +867,7 @@ function renderDashboard(c) {
         <span style="font-size:1.8rem;font-family:var(--font-display);color:var(--text)">${DB.bookings.length}</span>
       </div>
       <div class="stat-label">Total Bookings</div>
-      <div class="stat-sub">flights, hotels & more</div>
+      <div class="stat-sub">flights, accommodation & more</div>
     </div>
     <div class="card card-sm">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -944,11 +948,13 @@ function renderDashboard(c) {
 function bstat(s){
   const styles={
     planned:  'background:#B8903A;color:#fff',
+    booked:   'background:#6878A8;color:#fff',
     ongoing:  'background:#6A9050;color:#fff',
-    completed:'background:#6878A8;color:#fff',
+    completed:'background:#6A9050;color:#fff',
+    confirmed:'background:#6878A8;color:#fff',
     cancelled:'background:#B85858;color:#fff'
   };
-  const labels={planned:'Planning',ongoing:'Ongoing',completed:'Completed',cancelled:'Cancelled'};
+  const labels={planned:'Planning',booked:'Booked',ongoing:'Ongoing',completed:'Completed',confirmed:'Confirmed',cancelled:'Cancelled'};
   const st = styles[s] || 'background:#8A7060;color:#fff';
   return `<span style="display:inline-flex;align-items:center;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:20px;font-weight:700;white-space:nowrap;${st}">${labels[s]||s||'Planning'}</span>`;
 }
@@ -1170,7 +1176,20 @@ function renderDestDetail(c) {
 
   <!-- 1: BOOKINGS -->
   <div class="tab-panel" id="dp1">
-    <div class="sec-head"><div class="sec-title">Bookings</div><button class="btn btn-primary btn-sm" onclick="openBookingModal(null,'${d.id}')">+ Add Booking</button></div>
+    <div class="sec-head">
+        <div class="sec-title">Bookings</div>
+        <div class="sec-actions" style="gap:6px;flex-wrap:wrap">
+          <select class="form-select" id="bkTypeFilter" style="width:130px;font-size:.74rem" onchange="applyBookingFilter('${d.id}')">
+            <option value="">All Types</option>
+            ${['Flight','Accommodation','Train','Ferry','Bus','Tour','Restaurant','Other'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+          <select class="form-select" id="bkStatusFilter" style="width:130px;font-size:.74rem" onchange="applyBookingFilter('${d.id}')">
+            <option value="">All Statuses</option>
+            ${['booked','confirmed','completed','cancelled'].map(s=>`<option value="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openBookingModal(null,'${d.id}')">+ Add</button>
+        </div>
+      </div>
     <div id="bkTable"></div>
   </div>
 
@@ -1378,6 +1397,8 @@ function formatTime(t) {
   return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
 }
 
+function formatTime12(t) { return formatTime(t); }
+
 function openItinSetupModal(destId) {
   const dest = DB.destinations.find(x=>x.id===destId);
   openModal('Set Up Itinerary Days', `
@@ -1530,46 +1551,135 @@ function generateTimeOptions(endTime, minTime, selected) {
   return opts;
 }
 
+function applyBookingFilter(destId) {
+  const typeF  = document.getElementById('bkTypeFilter')?.value||'';
+  const statF  = document.getElementById('bkStatusFilter')?.value||'';
+  let bks = DB.bookings.filter(b=>b.destId===destId);
+  if(typeF)  bks = bks.filter(b=>b.type===typeF);
+  if(statF)  bks = bks.filter(b=>b.status===statF);
+  fillDestBookings(bks, destId);
+}
+
 function fillDestBookings(bks, destId) {
   const el=document.getElementById('bkTable');
   if(!el) return;
-  if(!bks.length){ el.innerHTML=`<div class="empty"><div class="empty-icon">◈</div><p>No bookings yet.</p></div>`; return; }
+
+  // Sort by date ascending
+  const sorted = [...bks].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  if(!sorted.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">◈</div><p>No bookings match your filter.</p></div>`;
+    return;
+  }
+
+  // Group by type for visual separation
+  const types = [...new Set(sorted.map(b=>b.type))];
+
+  let rows = '';
+  types.forEach(type=>{
+    const group = sorted.filter(b=>b.type===type);
+    rows += `<tr><td colspan="8" style="background:var(--surface2);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light);padding:6px 16px;font-weight:600;border-bottom:1px solid var(--border)">${type}</td></tr>`;
+    group.forEach(b=>{
+      const dateStr = b.date ? (b.dateEnd && b.dateEnd!==b.date ? b.date+' → '+b.dateEnd : b.date) : '—';
+      const isAccomm = b.type==='Accommodation';
+      const timeStr = isAccomm
+        ? (b.checkInTime||b.checkOutTime ? `<span style="font-size:.66rem;color:var(--green)">In: ${b.checkInTime||'—'}</span><br><span style="font-size:.66rem;color:var(--amber)">Out: ${b.checkOutTime||'—'}</span>` : '—')
+        : (b.bookingTime ? `<span style="font-size:.72rem;font-weight:500;color:var(--accent)">${formatTime12(b.bookingTime)}</span>` : '—');
+      rows += `<tr>
+        <td><div style="font-weight:500;font-size:.8rem">${b.name}</div>${b.notes?`<div style="font-size:.68rem;color:var(--text-light)">${b.notes}</div>`:''}</td>
+        <td><span class="badge b-blue">${b.type}</span></td>
+        <td style="font-size:.72rem;white-space:nowrap">${dateStr}</td>
+        <td style="font-size:.72rem">${timeStr}</td>
+        <td style="font-size:.72rem;color:var(--text-light)">${b.confirmation||'—'}</td>
+        <td style="font-size:.78rem">
+          ${b.totalAmount&&b.splitPeople>1
+            ? `<div style="font-weight:500">₱${parseFloat(b.amount).toLocaleString('en',{minimumFractionDigits:2})}</div>
+               <div style="font-size:.65rem;color:var(--text-light)">÷${b.splitPeople} of ₱${parseFloat(b.totalAmount).toLocaleString('en',{minimumFractionDigits:2})}</div>`
+            : (b.amount ? '₱'+parseFloat(b.amount).toLocaleString('en',{minimumFractionDigits:2}) : '—')
+          }
+        </td>
+        <td>${bstat(b.status||'booked')}</td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm" onclick="openBookingModal('${b.id}','${destId}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="delItem('bookings','${b.id}',()=>openDest('${destId}'))">✕</button>
+        </div></td>
+      </tr>`;
+    });
+  });
+
   el.innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Name</th><th>Type</th><th>Date</th><th>Confirmation</th><th>Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${bks.map(b=>`<tr>
-      <td><div style="font-weight:500;font-size:.8rem">${b.name}</div>${b.notes?`<div style="font-size:.68rem;color:var(--text-light)">${b.notes}</div>`:''}</td>
-      <td><span class="badge b-blue">${b.type}</span></td>
-      <td style="font-size:.72rem">${b.date||'—'}</td>
-      <td style="font-size:.72rem;color:var(--text-light)">${b.confirmation||'—'}</td>
-      <td style="font-size:.78rem">${b.amount?'$'+b.amount:'—'}</td>
-      <td>${bstat(b.status||'planned')}</td>
-      <td><div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="openBookingModal('${b.id}','${destId}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delItem('bookings','${b.id}',()=>openDest('${destId}'))">✕</button>
-      </div></td>
-    </tr>`).join('')}</tbody>
+    <thead><tr><th>Name</th><th>Type</th><th>Dates</th><th>Time</th><th>Confirmation</th><th>My Share</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
   </table></div>`;
 }
 
 function fillDestBudget(exps, destId) {
   const st=document.getElementById('expStats'), tbl=document.getElementById('expTable');
   if(!st||!tbl) return;
-  const total=exps.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const byCat={};
-  exps.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+parseFloat(e.amount||0); });
+
+  const typeToCategory = {Flight:'Flights',Accommodation:'Accommodation',Train:'Transport',Ferry:'Transport',Bus:'Transport',Tour:'Activities',Restaurant:'Food',Other:'Other'};
+
+  // Merge bookings (with amounts) + manual expenses into one list
+  const bookingEntries = DB.bookings
+    .filter(b=>b.destId===destId && b.amount && parseFloat(b.amount)>0)
+    .map(b=>({
+      id:'bk_'+b.id, _isBooking:true, _bookingId:b.id,
+      description:b.name + (b.splitPeople>1?` (÷${b.splitPeople})`:''),
+      category: typeToCategory[b.type]||'Other',
+      amount: parseFloat(b.amount),
+      totalAmount: parseFloat(b.totalAmount||b.amount),
+      splitPeople: b.splitPeople||1,
+      date: b.date,
+      type: b.type
+    }));
+
+  // Manual expenses (exclude any that were auto-created from bookings, to avoid double-counting)
+  const manualExps = exps.filter(e=>!e._fromBooking);
+
+  // Combined list
+  // Sort chronologically: by date asc, then by booking time asc
+  const allEntries = [...bookingEntries, ...manualExps].sort((a,b)=>{
+    const dateCmp = (a.date||'').localeCompare(b.date||'');
+    if(dateCmp!==0) return dateCmp;
+    // secondary sort by time (checkInTime for accommodation, bookingTime for others)
+    const aTime = a._bookingId ? (DB.bookings.find(x=>x.id===a._bookingId)||{}).checkInTime||'00:00' : '00:00';
+    const bTime = b._bookingId ? (DB.bookings.find(x=>x.id===b._bookingId)||{}).checkInTime||'00:00' : '00:00';
+    return aTime.localeCompare(bTime);
+  });
+
+  const total = allEntries.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const byCat = {};
+  allEntries.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+parseFloat(e.amount||0); });
+
   st.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap">
-    <div class="card card-sm" style="flex:1;min-width:100px"><div class="stat-label">Total</div><div class="stat-val" style="font-size:1.5rem">$${total.toFixed(0)}</div></div>
-    ${Object.entries(byCat).map(([k,v])=>`<div class="card card-sm" style="flex:1;min-width:100px"><div class="stat-label">${k}</div><div class="stat-val" style="font-size:1.5rem">$${v.toFixed(0)}</div></div>`).join('')}
+    <div class="card card-sm" style="flex:1;min-width:100px"><div class="stat-label">Total (My Share)</div><div class="stat-val" style="font-size:1.5rem">₱${total.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    ${Object.entries(byCat).map(([k,v])=>`<div class="card card-sm" style="flex:1;min-width:100px"><div class="stat-label">${k}</div><div class="stat-val" style="font-size:1.5rem">₱${v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`).join('')}
   </div>`;
-  if(!exps.length){ tbl.innerHTML=`<div class="empty"><div class="empty-icon">◎</div><p>No expenses yet.</p></div>`; return; }
+
+  if(!allEntries.length){
+    tbl.innerHTML=`<div class="empty"><div class="empty-icon">◎</div><p>No expenses yet.<br><span style="font-size:.75rem">Add bookings or manual expenses and they'll appear here.</span></p></div>`;
+    return;
+  }
+
   tbl.innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th><th></th></tr></thead>
-    <tbody>${exps.slice().reverse().map(e=>`<tr>
-      <td>${e.description}</td>
+    <thead><tr><th>Description</th><th>Category</th><th>Date</th><th>My Share</th><th>Total</th><th></th></tr></thead>
+    <tbody>${allEntries.map(e=>`<tr>
+      <td>
+        <div style="font-weight:500;font-size:.8rem">${e.description}</div>
+        ${e._isBooking?`<div style="font-size:.65rem;color:var(--text-light);margin-top:2px">From booking</div>`:''}
+        ${!e._isBooking&&e.sharedWith?`<div style="font-size:.65rem;margin-top:2px"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span></div>`:''}
+      </td>
       <td><span class="badge b-amber">${e.category}</span></td>
       <td style="font-size:.72rem">${e.date||'—'}</td>
-      <td style="font-weight:500">$${parseFloat(e.amount).toFixed(2)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="delItem('expenses','${e.id}',()=>openDest('${destId}'))">✕</button></td>
+      <td style="font-weight:500;color:var(--accent)">₱${parseFloat(e.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td style="font-size:.72rem;color:var(--text-light)">${e.splitPeople>1?'₱'+parseFloat(e.totalAmount||e.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td>${e._isBooking
+        ? `<span style="font-size:.65rem;color:var(--text-light);font-style:italic">Edit in Bookings</span>`
+        : `<div style="display:flex;gap:4px">
+             <button class="btn btn-ghost btn-sm" onclick="openExpenseModal('${destId}','${e.id}')">Edit</button>
+             <button class="btn btn-danger btn-sm" onclick="delItem('expenses','${e.id}',()=>openDest('${destId}'))">✕</button>
+           </div>`
+      }</td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -1709,42 +1819,219 @@ function deleteDest(id) {
 function openBookingModal(id, destId) {
   const b=id?DB.bookings.find(x=>x.id===id)||{}:{};
   const dId=b.destId||destId;
+  const isAccomm = (b.type||'Flight')==='Accommodation';
+
   openModal(id?'Edit Booking':'Add Booking',`
     <div class="fr2">
       <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="f_bn" placeholder="e.g. AirAsia KL→PEN" value="${b.name||''}"></div>
-      <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="f_bt">
-        ${['Flight','Hotel','Train','Ferry','Bus','Tour','Restaurant','Other'].map(t=>`<option${b.type===t?' selected':''}>${t}</option>`).join('')}
-      </select></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="f_bt" onchange="updateBookingDateFields(this.value)">
+          ${['Flight','Accommodation','Train','Ferry','Bus','Tour','Restaurant','Other'].map(t=>`<option${(b.type||'Flight')===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <!-- HOTEL: check-in/out dates + times -->
+    <div id="bk_accomm" style="display:${isAccomm?'block':'none'}">
+      <div class="fr2">
+        <div class="form-group"><label class="form-label">Check-in Date ✦</label><input class="form-input" id="f_bd" type="date" value="${b.date||''}"></div>
+        <div class="form-group"><label class="form-label">Check-out Date ✦</label><input class="form-input" id="f_bdend" type="date" value="${b.dateEnd||''}"></div>
+      </div>
+      <div class="fr2">
+        <div class="form-group"><label class="form-label">Check-in Time</label><input class="form-input" id="f_bckin" type="time" value="${b.checkInTime||'14:00'}"></div>
+        <div class="form-group"><label class="form-label">Check-out Time</label><input class="form-input" id="f_bckout" type="time" value="${b.checkOutTime||'12:00'}"></div>
+      </div>
+    </div>
+
+    <!-- OTHER: start date (mandatory) + end date + arrival/booking time -->
+    <div id="bk_other" style="display:${isAccomm?'none':'block'}">
+      <div class="fr2">
+        <div class="form-group"><label class="form-label">Start Date ✦</label><input class="form-input" id="f_bd2" type="date" value="${b.date||''}"></div>
+        <div class="form-group"><label class="form-label">End Date ✦</label><input class="form-input" id="f_bdend2" type="date" value="${b.dateEnd||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label" id="f_btime_label">Arrival / Departure Time</label>
+        <input class="form-input" id="f_btime" type="time" value="${b.bookingTime||''}">
+        <div style="font-size:.68rem;color:var(--text-light);margin-top:4px">e.g. required arrival time at the bus station, flight departure, tour meeting time</div>
+      </div>
+    </div>
+
+    <div class="form-group"><label class="form-label">Confirmation No.</label><input class="form-input" id="f_bc" placeholder="ABC123" value="${b.confirmation||''}"></div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px">
+      <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:10px">Cost Splitting</div>
+      <div class="fr2" style="margin-bottom:0">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Total Amount (₱)</label>
+          <input class="form-input" id="f_ba" type="number" step="0.01" placeholder="0.00" value="${b.totalAmount||b.amount||''}" oninput="calcBookingSplit()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Split Between # People</label>
+          <input class="form-input" id="f_bsplit" type="number" min="1" placeholder="1" value="${b.splitPeople||1}" oninput="calcBookingSplit()">
+        </div>
+      </div>
+      <div id="bk_split_result" style="margin-top:10px;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);display:${(b.splitPeople&&b.splitPeople>1)?'flex':'none'};align-items:center;justify-content:space-between">
+        <span style="font-size:.76rem;color:var(--text-mid)">My share</span>
+        <span id="bk_split_val" style="font-family:var(--font-display);font-size:1.2rem;color:var(--accent)">${(b.splitPeople&&b.splitPeople>1)?'₱'+(parseFloat(b.totalAmount||b.amount||0)/parseInt(b.splitPeople)).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}</span>
+      </div>
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_bd" type="date" value="${b.date||''}"></div>
-      <div class="form-group"><label class="form-label">Confirmation No.</label><input class="form-input" id="f_bc" placeholder="ABC123" value="${b.confirmation||''}"></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-select" id="f_bs">
+          ${['booked','confirmed','completed','cancelled'].map(s=>`<option${(b.status||'booked')===s?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label></div>
     </div>
-    <div class="fr2">
-      <div class="form-group"><label class="form-label">Amount ($)</label><input class="form-input" id="f_ba" type="number" placeholder="0.00" value="${b.amount||''}"></div>
-      <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f_bs">
-        ${['planned','confirmed','completed','cancelled'].map(s=>`<option${(b.status||'planned')===s?' selected':''}>${s}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f_bno" rows="2">${b.notes||''}</textarea></div>
+    <div class="form-group"><textarea class="form-textarea" id="f_bno" rows="2" placeholder="Any extra details...">${b.notes||''}</textarea></div>
   `,()=>{
-    const obj={id:id||uid(),destId:dId,name:fv('f_bn'),type:fv('f_bt'),date:fv('f_bd'),confirmation:fv('f_bc'),amount:fv('f_ba'),status:fv('f_bs'),notes:fv('f_bno')};
-    if(id){const i=DB.bookings.findIndex(x=>x.id===id);DB.bookings[i]=obj;}else DB.bookings.push(obj);
+    const type = fv('f_bt');
+    const isH = type === 'Accommodation';
+    const date    = isH ? fv('f_bd')    : fv('f_bd2');
+    const dateEnd = isH ? fv('f_bdend') : fv('f_bdend2');
+    if(!date)    { alert('Please enter a start date.'); return; }
+    if(!dateEnd) { alert('Please enter an end date.');  return; }
+    const obj={
+      id:id||uid(), destId:dId,
+      name:fv('f_bn'), type,
+      date, dateEnd,
+      checkInTime:  isH ? fv('f_bckin')  : null,
+      checkOutTime: isH ? fv('f_bckout') : null,
+      bookingTime:  isH ? null : fv('f_btime'),
+      confirmation:fv('f_bc'),
+      totalAmount:fv('f_ba'),
+      splitPeople:parseInt(fv('f_bsplit'))||1,
+      amount:(parseFloat(fv('f_ba'))||0)/(parseInt(fv('f_bsplit'))||1),
+      status:fv('f_bs'), notes:fv('f_bno')
+    };
+    if(id) {
+      const i=DB.bookings.findIndex(x=>x.id===id);
+      // update linked expense if exists
+      const oldB = DB.bookings[i];
+      if(oldB._expId) {
+        const ei = DB.expenses.findIndex(x=>x.id===oldB._expId);
+        if(ei>-1) DB.expenses[ei]={...DB.expenses[ei],description:obj.name,amount:obj.amount,date:obj.date};
+      }
+      DB.bookings[i]={...obj,_expId:oldB._expId};
+    } else {
+      // auto-create expense entry in destination budget
+      const expId = uid();
+      const typeToCategory = {Flight:'Flights',Accommodation:'Accommodation',Train:'Transport',Ferry:'Transport',Bus:'Transport',Tour:'Activities',Restaurant:'Food',Other:'Other'};
+      DB.expenses.push({id:expId,destId:dId,description:obj.name,category:typeToCategory[obj.type]||'Other',amount:obj.amount,totalAmount:obj.totalAmount,splitPeople:obj.splitPeople,date:obj.date,_fromBooking:true});
+      obj._expId = expId;
+      DB.bookings.push(obj);
+    }
     save(); closeModal(); openDest(dId);
+  }, false, 'Save Booking');
+}
+
+function calcRecSplit() {
+  const total = parseFloat(document.getElementById('f_rtotal')?.value||0);
+  const people = parseInt(document.getElementById('f_rsplit')?.value||1)||1;
+  const result = document.getElementById('rec_split_result');
+  const val = document.getElementById('rec_split_val');
+  if(result) result.style.display = (people > 1 && total > 0) ? 'flex' : 'none';
+  if(val) val.textContent = '₱'+(total/people).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function calcVarSplit() {
+  const total = parseFloat(document.getElementById('f_vtotal')?.value||0);
+  const people = parseInt(document.getElementById('f_vsplit')?.value||1)||1;
+  const result = document.getElementById('var_split_result');
+  const val = document.getElementById('var_split_val');
+  if(result) result.style.display = (people > 1 && total > 0) ? 'flex' : 'none';
+  if(val) val.textContent = '₱'+(total/people).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function calcBookingSplit() {
+  const total = parseFloat(document.getElementById('f_ba')?.value||0);
+  const people = parseInt(document.getElementById('f_bsplit')?.value||1)||1;
+  const result = document.getElementById('bk_split_result');
+  const val = document.getElementById('bk_split_val');
+  if(result) result.style.display = (people > 1 && total > 0) ? 'flex' : 'none';
+  if(val) val.textContent = '₱'+(total/people).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function updateBookingDateFields(type) {
+  const isAccomm = type === 'Accommodation';
+  const accEl = document.getElementById('bk_accomm');
+  const otherEl = document.getElementById('bk_other');
+  if(accEl) accEl.style.display = isAccomm ? 'block' : 'none';
+  if(otherEl) otherEl.style.display = isAccomm ? 'none' : 'block';
+  const timeLabel = document.getElementById('f_btime_label');
+  if(timeLabel) {
+    const labels = {
+      Flight:'Departure Time', Train:'Departure Time', Ferry:'Departure Time',
+      Bus:'Required Arrival at Station', Tour:'Meeting / Departure Time',
+      Restaurant:'Reservation Time', Other:'Booking Time'
+    };
+    timeLabel.textContent = labels[type] || 'Booking Time';
+  }
+}
+
+function openExpenseModal(destId, id) {
+  const e = id ? DB.expenses.find(x=>x.id===id)||{} : {};
+  const splitPeople = e.splitPeople||1;
+  const totalAmt = e.totalAmount||e.amount||'';
+  openModal(id?'Edit Expense':'Add Expense',`
+    <div class="form-group"><label class="form-label">Description</label>
+      <input class="form-input" id="f_ed" placeholder="e.g. Accommodation deposit, Dinner, Taxi" value="${e.description||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="f_ec">
+          ${['Flights','Accommodation','Food','Transport','Activities','Shopping','Other'].map(x=>`<option${e.category===x?' selected':''}>${x}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label>
+        <input class="form-input" id="f_edt" type="date" value="${e.date||td()}">
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:4px">
+      <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:10px">Cost Splitting</div>
+      <div class="fr2" style="margin-bottom:8px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Total Amount (₱)</label>
+          <input class="form-input" id="f_ea" type="number" step="0.01" placeholder="0.00" value="${totalAmt}" oninput="calcExpSplit()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Split Between # People</label>
+          <input class="form-input" id="f_esplit" type="number" min="1" placeholder="1" value="${splitPeople}" oninput="calcExpSplit()">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">Split with (names, optional)</label>
+        <input class="form-input" id="f_eshared" placeholder="e.g. Sister, Mom, Friends" value="${e.sharedWith||''}">
+      </div>
+      <div id="exp_split_result" style="padding:9px 12px;background:var(--accent-light);border-radius:var(--radius-sm);display:${splitPeople>1?'flex':'none'};align-items:center;justify-content:space-between">
+        <span style="font-size:.76rem;color:var(--text-mid)">My share</span>
+        <span id="exp_split_val" style="font-family:var(--font-display);font-size:1.15rem;color:var(--accent)">
+          ${splitPeople>1?'₱'+((parseFloat(totalAmt)||0)/splitPeople).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}
+        </span>
+      </div>
+    </div>
+  `,()=>{
+    const total = parseFloat(fv('f_ea'))||0;
+    const split = parseInt(fv('f_esplit'))||1;
+    const obj = {
+      id:id||uid(), destId,
+      description:fv('f_ed'), category:fv('f_ec'),
+      totalAmount:total, splitPeople:split,
+      amount:(total/split).toFixed(2),
+      sharedWith:fv('f_eshared'),
+      date:fv('f_edt')
+    };
+    if(id){ const i=DB.expenses.findIndex(x=>x.id===id); DB.expenses[i]=obj; }
+    else DB.expenses.push(obj);
+    save(); closeModal(); openDest(destId);
   });
 }
 
-function openExpenseModal(destId) {
-  openModal('Add Expense',`
-    <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="f_ed" placeholder="e.g. Hotel deposit"></div>
-    <div class="fr2">
-      <div class="form-group"><label class="form-label">Category</label><select class="form-select" id="f_ec">
-        ${['Flights','Accommodation','Food','Transport','Activities','Shopping','Other'].map(x=>`<option>${x}</option>`).join('')}
-      </select></div>
-      <div class="form-group"><label class="form-label">Amount ($)</label><input class="form-input" id="f_ea" type="number" placeholder="0.00"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_edt" type="date" value="${td()}"></div>
-  `,()=>{ DB.expenses.push({id:uid(),destId,description:fv('f_ed'),category:fv('f_ec'),amount:fv('f_ea'),date:fv('f_edt')}); save(); closeModal(); openDest(destId); });
+function calcExpSplit() {
+  const total = parseFloat(document.getElementById('f_ea')?.value||0);
+  const people = parseInt(document.getElementById('f_esplit')?.value||1)||1;
+  const result = document.getElementById('exp_split_result');
+  const val = document.getElementById('exp_split_val');
+  if(result) result.style.display = (people>1 && total>0) ? 'flex' : 'none';
+  if(val) val.textContent = '₱'+(total/people).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
 function openPackingModal(destId) {
@@ -1763,9 +2050,9 @@ function openPackingModal(destId) {
 function openDocModal(destId) {
   openModal('Add Document',`
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="f_dtt" placeholder="e.g. Hotel Booking Confirmation"></div>
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="f_dtt" placeholder="e.g. Accommodation Booking Confirmation"></div>
       <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="f_dtp">
-        ${['Booking Confirmation','Flight Ticket','Hotel Voucher','Visa','Insurance','Itinerary','Receipt','Other'].map(t=>`<option>${t}</option>`).join('')}
+        ${['Booking Confirmation','Flight Ticket','Accommodation Voucher','Visa','Insurance','Itinerary','Receipt','Other'].map(t=>`<option>${t}</option>`).join('')}
       </select></div>
     </div>
     <div class="form-group"><label class="form-label">Notes / Reference</label><textarea class="form-textarea" id="f_dno" rows="2" placeholder="Confirmation number, notes, reference..."></textarea></div>
@@ -2198,6 +2485,483 @@ function openNutritionModal() {
   `,()=>{ DB.nutrition.push({id:uid(),date:fv('f_nd'),meal:fv('f_nm'),description:fv('f_ndesc'),calories:fv('f_ncal'),protein:fv('f_nprot'),carbs:fv('f_ncarb'),notes:fv('f_nno')}); save();closeModal();renderNutrition(document.getElementById('content')); });
 }
 
+
+// ══════════════════════════════════════════════
+// BUDGET TRACKER
+// ══════════════════════════════════════════════
+function renderBudget(c) {
+  if(!DB.budgetVarExp) DB.budgetVarExp=[];
+  const totalIncome   = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  const totalLoans    = DB.budgetLoans.reduce((s,l)=>s+parseFloat(l.monthlyPayment||0),0);
+  const totalRecurr   = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+  const totalVar      = DB.budgetVarExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const totalOut      = totalLoans + totalRecurr + totalVar;
+  const remaining     = totalIncome - totalOut;
+  const remainingColor= remaining >= 0 ? 'var(--green)' : 'var(--red)';
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  c.innerHTML=`
+  ${pageStack.length?backBtn('Back'):''}
+
+  <!-- SUMMARY CARDS -->
+  <div class="grid-4" style="margin-bottom:20px">
+    <div class="card card-sm">
+      <div class="stat-label">Monthly Income</div>
+      <div class="stat-val" style="font-size:1.5rem;color:var(--green)">₱${fmt(totalIncome)}</div>
+      <div class="stat-sub">${DB.budgetIncome.length} source${DB.budgetIncome.length!==1?'s':''}</div>
+    </div>
+    <div class="card card-sm">
+      <div class="stat-label">Loans</div>
+      <div class="stat-val" style="font-size:1.5rem;color:var(--amber)">₱${fmt(totalLoans)}</div>
+      <div class="stat-sub">${DB.budgetLoans.length} loan${DB.budgetLoans.length!==1?'s':''}</div>
+    </div>
+    <div class="card card-sm">
+      <div class="stat-label">Recurring</div>
+      <div class="stat-val" style="font-size:1.5rem;color:var(--blue)">₱${fmt(totalRecurr)}</div>
+      <div class="stat-sub">${DB.budgetBills.length} fixed bill${DB.budgetBills.length!==1?'s':''}</div>
+    </div>
+    <div class="card card-sm">
+      <div class="stat-label">Variable</div>
+      <div class="stat-val" style="font-size:1.5rem;color:var(--purple)">₱${fmt(totalVar)}</div>
+      <div class="stat-sub">${DB.budgetVarExp.length} entr${DB.budgetVarExp.length!==1?'ies':'y'} this month</div>
+    </div>
+  </div>
+
+  <!-- BREAKDOWN BAR -->
+  <div class="card card-sm" style="margin-bottom:22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:.78rem;font-weight:600;color:var(--text-mid)">Monthly Overview</span>
+      <span style="font-size:.72rem;color:${remainingColor};font-weight:500">${remaining>=0?'₱'+fmt(remaining)+' left':'₱'+fmt(Math.abs(remaining))+' over budget'}</span>
+    </div>
+    <div style="height:12px;border-radius:8px;background:var(--border);overflow:hidden;display:flex">
+      ${totalIncome>0?`
+        <div style="width:${Math.min(totalLoans/totalIncome*100,100)}%;background:var(--amber);transition:width .4s" title="Loans"></div>
+        <div style="width:${Math.min(totalRecurr/totalIncome*100,Math.max(0,100-totalLoans/totalIncome*100))}%;background:var(--blue);transition:width .4s" title="Recurring"></div>
+        <div style="width:${Math.min(totalVar/totalIncome*100,Math.max(0,100-(totalLoans+totalRecurr)/totalIncome*100))}%;background:var(--purple);transition:width .4s" title="Variable"></div>
+        <div style="flex:1;background:var(--green);opacity:.5" title="Remaining"></div>
+      `:'<div style="flex:1;background:var(--border);border-radius:8px"></div>'}
+    </div>
+    <div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap">
+      <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--amber);display:inline-block"></span>Loans</span>
+      <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--blue);display:inline-block"></span>Recurring</span>
+      <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--purple);display:inline-block"></span>Variable</span>
+      <span style="font-size:.68rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Free</span>
+    </div>
+  </div>
+
+  <!-- TOP ROW: Income + Loans -->
+  <div class="grid-2" style="align-items:start;margin-bottom:22px">
+    <div>
+      <div class="sec-head"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
+      <div id="incomeList"></div>
+    </div>
+    <div>
+      <div class="sec-head"><div class="sec-title">🏦 Loans</div><button class="btn btn-primary btn-sm" onclick="openLoanModal()">+ Add</button></div>
+      <div id="loanList"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM ROW: Recurring + Variable -->
+  <div class="grid-2" style="align-items:start">
+
+    <!-- RECURRING EXPENSES -->
+    <div>
+      <div class="sec-head">
+        <div>
+          <div class="sec-title">🔁 Recurring Expenses</div>
+          <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Fixed bills every month — rent, utilities, subscriptions</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ Add</button>
+      </div>
+      <div id="recurringList"></div>
+    </div>
+
+    <!-- VARIABLE EXPENSES -->
+    <div>
+      <div class="sec-head">
+        <div>
+          <div class="sec-title">📌 Variable Expenses</div>
+          <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Occasional costs — dining out, shared bills, one-time purchases</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openVarExpModal()">+ Add</button>
+      </div>
+      <div id="varExpList"></div>
+    </div>
+
+  </div>`;
+
+  fillIncomeList();
+  fillLoanList();
+  fillRecurringList();
+  fillVarExpList();
+}
+
+function fillIncomeList() {
+  const el = document.getElementById('incomeList'); if(!el) return;
+  if(!DB.budgetIncome.length) {
+    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">💰</div><p>No income added yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = DB.budgetIncome.map(i=>`
+    <div class="card card-sm" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.label}</div>
+          <div style="font-size:.7rem;color:var(--text-light)">${i.type||'Income'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">$${parseFloat(i.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+          <div style="font-size:.65rem;color:var(--text-light)">/month</div>
+        </div>
+      </div>
+      ${i.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${i.notes}</div>`:''}
+      <div style="display:flex;gap:5px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openIncomeModal('${i.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function fillLoanList() {
+  const el = document.getElementById('loanList'); if(!el) return;
+  if(!DB.budgetLoans.length) {
+    el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">🏦</div><p>No loans added yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = DB.budgetLoans.map(l=>{
+    const paid = parseFloat(l.paid||0);
+    const total = parseFloat(l.totalAmount||0);
+    const pct = total>0 ? Math.min(100,Math.round(paid/total*100)) : 0;
+    return `
+    <div class="card card-sm" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${l.label}</div>
+          <div style="font-size:.7rem;color:var(--text-light)">${l.lender||''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--amber)">$${parseFloat(l.monthlyPayment).toLocaleString('en',{minimumFractionDigits:2})}</div>
+          <div style="font-size:.65rem;color:var(--text-light)">/month</div>
+        </div>
+      </div>
+      ${total>0?`
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-light);margin-bottom:4px">
+            <span>Paid $${paid.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            <span>of $${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+          </div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+        </div>`:''}
+      ${l.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${l.notes}</div>`:''}
+      <div style="display:flex;gap:5px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openLoanModal('${l.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetLoans','${l.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fillRecurringList() {
+  const el = document.getElementById('recurringList'); if(!el) return;
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(!DB.budgetBills.length) {
+    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">🔁</div><p style="font-size:.8rem">No recurring expenses yet.<br>Add rent, electricity, water, subscriptions...</p></div>`;
+    return;
+  }
+  const total = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+  el.innerHTML = `
+    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
+      <span>${DB.budgetBills.length} item${DB.budgetBills.length!==1?'s':''}</span>
+      <span style="font-weight:600;color:var(--blue)">Total: ₱${fmt(total)}/mo</span>
+    </div>` +
+  DB.budgetBills.map(b=>`
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--blue)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${b.label}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${b.category?`<span class="chip">${b.category}</span>`:''}
+            <span style="font-size:.65rem;color:var(--text-light)">${b.frequency||'Monthly'}</span>
+            ${b.dueDay?`<span style="font-size:.65rem;color:var(--text-light)">· Due day ${b.dueDay}</span>`:''}
+            ${b.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${b.sharedWith}</span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--blue)">₱${fmt(b.amount)}</div>
+            ${b.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${b.splitPeople} of ₱${fmt(b.totalAmount||b.amount)}</div>`:''}
+          </div>
+      </div>
+      ${b.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${b.notes}</div>`:''}
+      <div style="display:flex;gap:5px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openRecurringModal('${b.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetBills','${b.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function fillVarExpList() {
+  if(!DB.budgetVarExp) DB.budgetVarExp=[];
+  const el = document.getElementById('varExpList'); if(!el) return;
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(!DB.budgetVarExp.length) {
+    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">No variable expenses yet.<br>Record dining out, shared bills, one-off purchases...</p></div>`;
+    return;
+  }
+  const sorted = [...DB.budgetVarExp].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  el.innerHTML = `
+    <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
+      <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
+      <span style="font-weight:600;color:var(--purple)">Total: ₱${fmt(total)}</span>
+    </div>` +
+  sorted.map(e=>`
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--purple)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${e.label}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${e.category?`<span class="chip">${e.category}</span>`:''}
+            ${e.date?`<span style="font-size:.65rem;color:var(--text-light)">${e.date}</span>`:''}
+            ${e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--purple)">₱${fmt(e.amount)}</div>
+            ${e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
+          </div>
+      </div>
+      ${e.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${e.notes}</div>`:''}
+      <div style="display:flex;gap:5px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openVarExpModal('${e.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr+'T12:00:00');
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+
+function openIncomeModal(id) {
+  const item = id ? DB.budgetIncome.find(x=>x.id===id)||{} : {};
+  openModal(id?'Edit Income':'Add Income Source', `
+    <div class="form-group"><label class="form-label">Label</label>
+      <input class="form-input" id="f_ilabel" placeholder="e.g. Salary, Freelance, Business" value="${item.label||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Monthly Amount ($)</label>
+        <input class="form-input" id="f_iamt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="f_itype">
+          ${['Salary','Freelance','Business','Investment','Rental','Other'].map(t=>`<option${item.type===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="f_inotes" rows="2" placeholder="Optional notes...">${item.notes||''}</textarea>
+    </div>
+  `, () => {
+    const obj = {id:id||uid(), label:fv('f_ilabel'), amount:fv('f_iamt'), type:fv('f_itype'), notes:fv('f_inotes')};
+    if(id) { const i=DB.budgetIncome.findIndex(x=>x.id===id); DB.budgetIncome[i]=obj; }
+    else DB.budgetIncome.push(obj);
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  });
+}
+
+function openLoanModal(id) {
+  const item = id ? DB.budgetLoans.find(x=>x.id===id)||{} : {};
+  openModal(id?'Edit Loan':'Add Loan', `
+    <div class="form-group"><label class="form-label">Loan Name</label>
+      <input class="form-input" id="f_llabel" placeholder="e.g. Car Loan, Mortgage, Personal Loan" value="${item.label||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Lender</label>
+        <input class="form-input" id="f_llender" placeholder="e.g. BDO, Metrobank" value="${item.lender||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Monthly Payment ($)</label>
+        <input class="form-input" id="f_lpay" type="number" step="0.01" placeholder="0.00" value="${item.monthlyPayment||''}">
+      </div>
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Total Loan Amount ($)</label>
+        <input class="form-input" id="f_ltotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Amount Paid So Far ($)</label>
+        <input class="form-input" id="f_lpaid" type="number" step="0.01" placeholder="0.00" value="${item.paid||''}">
+      </div>
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Start Date</label>
+        <input class="form-input" id="f_lstart" type="date" value="${item.startDate||''}">
+      </div>
+      <div class="form-group"><label class="form-label">End Date</label>
+        <input class="form-input" id="f_lend" type="date" value="${item.endDate||''}">
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="f_lnotes" rows="2" placeholder="Interest rate, terms, etc.">${item.notes||''}</textarea>
+    </div>
+  `, () => {
+    const obj = {id:id||uid(), label:fv('f_llabel'), lender:fv('f_llender'), monthlyPayment:fv('f_lpay'), totalAmount:fv('f_ltotal'), paid:fv('f_lpaid'), startDate:fv('f_lstart'), endDate:fv('f_lend'), notes:fv('f_lnotes')};
+    if(id) { const i=DB.budgetLoans.findIndex(x=>x.id===id); DB.budgetLoans[i]=obj; }
+    else DB.budgetLoans.push(obj);
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  });
+}
+
+function openRecurringModal(id) {
+  const item = id ? DB.budgetBills.find(x=>x.id===id)||{} : {};
+  openModal(id?'Edit Recurring Expense':'Add Recurring Expense', `
+    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Fixed bills that repeat every month — rent, electricity, water, internet, subscriptions.</p>
+    <div class="form-group"><label class="form-label">Name</label>
+      <input class="form-input" id="f_rlabel" placeholder="e.g. Electricity, Rent, Netflix" value="${item.label||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Amount (₱)</label>
+        <input class="form-input" id="f_ramt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="f_rcat">
+          ${['Rent/Mortgage','Electricity','Water','Internet','Gas','Subscriptions','Insurance','Phone','Transport','Education','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Frequency</label>
+        <select class="form-select" id="f_rfreq">
+          ${['Monthly','Weekly','Fortnightly','Quarterly','Annually'].map(t=>`<option${item.frequency===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Due Day of Month</label>
+        <input class="form-input" id="f_rdueday" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.dueDay||''}">
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:8px">Cost Splitting</div>
+      <div class="fr2" style="margin-bottom:6px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Total Amount (₱)</label>
+          <input class="form-input" id="f_rtotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcRecSplit()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Split Between # People</label>
+          <input class="form-input" id="f_rsplit" type="number" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcRecSplit()">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:6px">
+        <label class="form-label">Split with (names, optional)</label>
+        <input class="form-input" id="f_rshared" placeholder="e.g. Sister, Roommate, Partner" value="${item.sharedWith||''}">
+      </div>
+      <div id="rec_split_result" style="padding:8px 10px;background:var(--accent-light);border-radius:var(--radius-sm);display:${(item.splitPeople&&item.splitPeople>1)?'flex':'none'};align-items:center;justify-content:space-between">
+        <span style="font-size:.74rem;color:var(--text-mid)">My share per ${item.frequency||'month'}</span>
+        <span id="rec_split_val" style="font-family:var(--font-display);font-size:1.1rem;color:var(--accent)">${(item.splitPeople&&item.splitPeople>1)?'₱'+(parseFloat(item.totalAmount||item.amount||0)/parseInt(item.splitPeople)).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}</span>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="f_rnotes" rows="2" placeholder="Account number, provider, auto-debit info...">${item.notes||''}</textarea>
+    </div>
+  `, () => {
+    const rTotal = parseFloat(fv('f_rtotal'))||0;
+    const rSplit = parseInt(fv('f_rsplit'))||1;
+    const obj = {
+      id:id||uid(), label:fv('f_rlabel'),
+      totalAmount:rTotal, splitPeople:rSplit,
+      amount:(rTotal/rSplit).toFixed(2),
+      sharedWith:fv('f_rshared'),
+      category:fv('f_rcat'), frequency:fv('f_rfreq'),
+      dueDay:fv('f_rdueday'), notes:fv('f_rnotes')
+    };
+    if(id) { const i=DB.budgetBills.findIndex(x=>x.id===id); DB.budgetBills[i]=obj; }
+    else DB.budgetBills.push(obj);
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  });
+}
+
+function openVarExpModal(id) {
+  if(!DB.budgetVarExp) DB.budgetVarExp=[];
+  const item = id ? DB.budgetVarExp.find(x=>x.id===id)||{} : {};
+  openModal(id?'Edit Variable Expense':'Add Variable Expense', `
+    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Occasional or one-off costs — dining out, shared bills, spontaneous purchases. Great for tracking your share of split expenses.</p>
+    <div class="form-group"><label class="form-label">Description</label>
+      <input class="form-input" id="f_vlabel" placeholder="e.g. Dinner at Jollibee, Sister's shared bill" value="${item.label||''}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">My Share (₱)</label>
+        <input class="form-input" id="f_vamt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Date</label>
+        <input class="form-input" id="f_vdate" type="date" value="${item.date||td()}">
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="f_vcat">
+          ${['Food & Dining','Shopping','Entertainment','Transport','Health','Beauty & Care','Groceries','Family','Travel','Other'].map(t=>`<option${item.category===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:8px">Cost Splitting</div>
+      <div class="fr2" style="margin-bottom:6px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Total Bill (₱)</label>
+          <input class="form-input" id="f_vtotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcVarSplit()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Split Between # People</label>
+          <input class="form-input" id="f_vsplit" type="number" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcVarSplit()">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:6px">
+        <label class="form-label">Split with (names, optional)</label>
+        <input class="form-input" id="f_vshared" placeholder="e.g. Sister, Mom, Friends" value="${item.sharedWith||''}">
+      </div>
+      <div id="var_split_result" style="padding:8px 10px;background:var(--accent-light);border-radius:var(--radius-sm);display:${(item.splitPeople&&item.splitPeople>1)?'flex':'none'};align-items:center;justify-content:space-between">
+        <span style="font-size:.74rem;color:var(--text-mid)">My share</span>
+        <span id="var_split_val" style="font-family:var(--font-display);font-size:1.1rem;color:var(--accent)">${(item.splitPeople&&item.splitPeople>1)?'₱'+(parseFloat(item.totalAmount||item.amount||0)/parseInt(item.splitPeople)).toLocaleString('en',{minimumFractionDigits:2}):'₱0.00'}</span>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="f_vnotes" rows="2" placeholder="What was it for? Any context to remember...">${item.notes||''}</textarea>
+    </div>
+  `, () => {
+    const vTotal = parseFloat(fv('f_vtotal'))||0;
+    const vSplit = parseInt(fv('f_vsplit'))||1;
+    const obj = {
+      id:id||uid(), label:fv('f_vlabel'),
+      totalAmount:vTotal, splitPeople:vSplit,
+      amount:(vTotal/vSplit).toFixed(2),
+      date:fv('f_vdate'), category:fv('f_vcat'),
+      sharedWith:fv('f_vshared'), notes:fv('f_vnotes')
+    };
+    if(id) { const i=DB.budgetVarExp.findIndex(x=>x.id===id); DB.budgetVarExp[i]=obj; }
+    else DB.budgetVarExp.push(obj);
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  });
+}
+
+function openBudgetQuickAdd() {
+  openModal('Add to Budget', `
+    <p style="font-size:.82rem;color:var(--text-mid);margin-bottom:16px">What would you like to add?</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openIncomeModal,100)">
+        💰 <span style="margin-left:6px">Income Source</span>
+      </button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openLoanModal,100)">
+        🏦 <span style="margin-left:6px">Loan</span>
+      </button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openBillModal,100)">
+        📋 <span style="margin-left:6px">Bill / Expense</span>
+      </button>
+    </div>
+  `, null);
+  // hide footer save button for this menu modal
+  const foot = document.getElementById('mFoot');
+  if(foot) foot.style.display = 'none';
+  setTimeout(()=>{ const foot2=document.getElementById('mFoot'); if(foot2) foot2.style.display=''; }, 200);
+}
+
 // ══════════════════════════════════════════════
 // SHARED HELPERS
 // ══════════════════════════════════════════════
@@ -2216,9 +2980,10 @@ function openModal(title, body, saveFn, large=false, saveLabel='Save', danger=fa
 }
 function closeModal(){
   document.getElementById('modalOverlay').classList.remove('open');
-  // Reset save button to default
   const saveBtn = document.getElementById('mFoot')?.querySelector('.btn-primary');
   if(saveBtn){ saveBtn.textContent='Save'; saveBtn.style.background=''; saveBtn.style.boxShadow=''; }
+  const mFoot = document.getElementById('mFoot');
+  if(mFoot) mFoot.style.display='';
   modalSaveFn=null;
 }
 function saveModal(){ if(modalSaveFn) try{ modalSaveFn(); }catch(e){ console.error(e); } }
