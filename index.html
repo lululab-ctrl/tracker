@@ -546,13 +546,12 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield}
 // ══════════════════════════════════════════════
 // HELPERS (must be defined before DB init)
 // ══════════════════════════════════════════════
-// Instantly hide splash on reload to prevent flash
+// Instantly hide splash if active session exists (prevents flash on refresh)
 (function(){
   try {
-    const isReload = (performance && performance.navigation && performance.navigation.type === 1)
-      || (performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0]?.type === 'reload');
-    const hasSession = !!sessionStorage.getItem('lulu_last');
-    if(isReload && hasSession) {
+    const ts = parseInt(sessionStorage.getItem('lulu_last')||'0');
+    const pg = sessionStorage.getItem('lulu_page');
+    if(ts && pg && (Date.now() - ts) < 5 * 60 * 1000) {
       const s = document.getElementById('splash');
       if(s) s.style.display = 'none';
     }
@@ -722,7 +721,7 @@ async function initDB() {
 
   ensureBuiltin();
   updateBadges();
-  go('dashboard', document.getElementById('nav_dashboard'), false);
+  // Navigation handled by restorePage() after this resolves
 }
 
 // ══════════════════════════════════════════════
@@ -3690,18 +3689,20 @@ document.addEventListener('click', function(e) {
 });
 
 // ══════════════════════════════════════════════
-// IDLE TIMEOUT — 10 minutes
+// IDLE TIMEOUT — 5 minutes
 // ══════════════════════════════════════════════
-const IDLE_MS = 10 * 60 * 1000; // 10 minutes
+const IDLE_MS = 5 * 60 * 1000; // 5 minutes
 
-// Reset idle timer on any user interaction
 let idleTimer = null;
 function resetIdle() {
   try { sessionStorage.setItem('lulu_last', Date.now()); } catch(e){}
   clearTimeout(idleTimer);
   idleTimer = setTimeout(()=>{
-    // Show splash after 10 min idle
-    try { sessionStorage.removeItem('lulu_last'); sessionStorage.removeItem('lulu_budget_unlocked'); } catch(e){}
+    try {
+      sessionStorage.removeItem('lulu_last');
+      sessionStorage.removeItem('lulu_page');
+      sessionStorage.removeItem('lulu_budget_unlocked');
+    } catch(e){}
     budgetUnlocked = false;
     const splash = document.getElementById('splash');
     if(splash) { splash.style.display='flex'; splash.classList.remove('hide'); }
@@ -3719,48 +3720,48 @@ updateBadges();
 
 function restorePage() {
   try {
-    const lastActivity = parseInt(sessionStorage.getItem('lulu_last')||'0');
-    const page = sessionStorage.getItem('lulu_page');
-    const now = Date.now();
+    const lastTs   = parseInt(sessionStorage.getItem('lulu_last')||'0');
+    const page     = sessionStorage.getItem('lulu_page');
+    const now      = Date.now();
+    const idledOut = lastTs && (now - lastTs) > IDLE_MS;
+    const hasSession = !!lastTs && !!page;
 
-    // Detect if this is a page refresh (F5) vs a fresh open
-    // performance.navigation.type === 1 means reload; sessionStorage also persists through reload
-    const isReload = (performance && performance.navigation && performance.navigation.type === 1)
-      || (performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0]?.type === 'reload');
-
-    // Fresh open (new tab / link opened): no session OR idle timed out
-    const idledOut = lastActivity && (now - lastActivity) > IDLE_MS;
-    const freshOpen = !lastActivity && !isReload;
-
-    if(freshOpen || idledOut || (!page && !isReload)) {
+    // Show splash: no session at all, or idle timed out
+    if(!hasSession || idledOut) {
+      try { sessionStorage.removeItem('lulu_last'); sessionStorage.removeItem('lulu_page'); } catch(e){}
       go('dashboard', document.getElementById('nav_dashboard'), false);
-      // Show splash only on genuine fresh opens or idle timeouts
       const splash = document.getElementById('splash');
-      if(splash) { splash.style.display = 'flex'; splash.classList.remove('hide'); }
+      if(splash) { splash.style.display='flex'; splash.classList.remove('hide'); }
       return;
     }
 
-    // Refresh within active session — restore silently, no splash
+    // Active session — restore exactly where user was
     const savedDestId = sessionStorage.getItem('lulu_destId');
     const savedProgId = sessionStorage.getItem('lulu_progId');
     const savedTab    = parseInt(sessionStorage.getItem('lulu_destTab')||'0');
-
     if(savedDestId) currentDestId = savedDestId;
     if(savedProgId) currentProgId = savedProgId;
     currentDestTab = savedTab;
 
-    const splash = document.getElementById('splash');
-    if(splash) { splash.style.display = 'none'; }
+    // Restore budget unlock if still valid
+    try { if(sessionStorage.getItem('lulu_budget_unlocked')==='1') budgetUnlocked=true; } catch(e){}
 
-    const targetPage = page || 'dashboard';
-    go(targetPage, document.getElementById('nav_'+(targetPage==='destination_detail'?'destinations':targetPage==='program_detail'?'programs':targetPage)), false);
+    const splash = document.getElementById('splash');
+    if(splash) { splash.style.display='none'; }
+
+    const navId = {
+      destination_detail:'nav_destinations',
+      program_detail:'nav_programs'
+    }[page] || ('nav_'+page);
+
+    go(page, document.getElementById(navId), false);
 
   } catch(e) {
     go('dashboard', document.getElementById('nav_dashboard'), false);
   }
 }
 
-// Load from cloud if configured, then restore page
+// Load from cloud then restore — initDB must NOT navigate on its own
 if(cloudEnabled) {
   initDB().then(()=>{ restorePage(); resetIdle(); });
 } else {
