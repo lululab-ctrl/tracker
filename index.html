@@ -552,6 +552,7 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield}
   try {
     const ts = parseInt(sessionStorage.getItem('lulu_last')||'0');
     const pg = sessionStorage.getItem('lulu_page');
+    // Only hide if BOTH are set and within 5 min — i.e. it's a refresh, not a fresh open
     if(ts && pg && (Date.now() - ts) < 5 * 60 * 1000) {
       const s = document.getElementById('splash');
       if(s) s.style.display = 'none';
@@ -775,13 +776,12 @@ const PAGE_META = {
 function go(page, navEl, pushStack=true) {
   if(pushStack && currentPage !== page) pageStack.push(currentPage);
   currentPage = page;
-  // Persist current page/context for refresh restore
+  // Persist current page/context for refresh restore (but do NOT touch lulu_last here)
   try {
     sessionStorage.setItem('lulu_page', page);
     if(page==='destination_detail') sessionStorage.setItem('lulu_destId', currentDestId||'');
     if(page==='program_detail') sessionStorage.setItem('lulu_progId', currentProgId||'');
     sessionStorage.setItem('lulu_destTab', currentDestTab||0);
-    sessionStorage.setItem('lulu_last', Date.now());
   } catch(e){}
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
   const navMap = {dashboard:'nav_dashboard',calendar:'nav_calendar',destinations:'nav_destinations',destination_detail:'nav_destinations',programs:'nav_programs',program_detail:'nav_programs',log:'nav_log',nutrition:'nav_nutrition',budget:'nav_budget'};
@@ -3854,9 +3854,13 @@ function enterApp() {
   const splash = document.getElementById('splash');
   splash.classList.add('hide');
   setTimeout(() => { splash.style.display = 'none'; }, 550);
-  try { sessionStorage.setItem('lulu_last', Date.now()); } catch(e){}
-  // Navigate to dashboard on fresh enter
+  // Establish session NOW so restorePage won't show splash again on next refresh
+  try {
+    sessionStorage.setItem('lulu_last', Date.now());
+    sessionStorage.setItem('lulu_page', 'dashboard');
+  } catch(e){}
   go('dashboard', document.getElementById('nav_dashboard'), false);
+  resetIdle();
 }
 
 // ══════════════════════════════════════════════
@@ -3909,40 +3913,46 @@ function restorePage() {
     const page     = sessionStorage.getItem('lulu_page');
     const now      = Date.now();
     const idledOut = lastTs && (now - lastTs) > IDLE_MS;
-    const hasSession = !!lastTs && !!page;
+    const hasSession = !!lastTs && !!page && !idledOut;
 
-    // Show splash: no session at all, or idle timed out
-    if(!hasSession || idledOut) {
-      try { sessionStorage.removeItem('lulu_last'); sessionStorage.removeItem('lulu_page'); } catch(e){}
-      go('dashboard', document.getElementById('nav_dashboard'), false);
+    if(!hasSession) {
+      // Fresh open or timed out — clear any stale keys and show splash
+      try {
+        sessionStorage.removeItem('lulu_last');
+        sessionStorage.removeItem('lulu_page');
+        sessionStorage.removeItem('lulu_budget_unlocked');
+      } catch(e){}
+      budgetUnlocked = false;
+      // Pre-render dashboard in background (hidden behind splash)
+      render('dashboard');
+      document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+      const nav = document.getElementById('nav_dashboard');
+      if(nav) nav.classList.add('active');
+      document.getElementById('tbTitle').textContent = 'Dashboard';
+      document.getElementById('tbBread').textContent = 'Lulu';
+      // Show splash on top
       const splash = document.getElementById('splash');
       if(splash) { splash.style.display='flex'; splash.classList.remove('hide'); }
       return;
     }
 
-    // Active session — restore exactly where user was
+    // Active session — restore exactly where user was, no splash
     const savedDestId = sessionStorage.getItem('lulu_destId');
     const savedProgId = sessionStorage.getItem('lulu_progId');
     const savedTab    = parseInt(sessionStorage.getItem('lulu_destTab')||'0');
     if(savedDestId) currentDestId = savedDestId;
     if(savedProgId) currentProgId = savedProgId;
     currentDestTab = savedTab;
-
-    // Restore budget unlock if still valid
     try { if(sessionStorage.getItem('lulu_budget_unlocked')==='1') budgetUnlocked=true; } catch(e){}
 
     const splash = document.getElementById('splash');
     if(splash) { splash.style.display='none'; }
 
-    const navId = {
-      destination_detail:'nav_destinations',
-      program_detail:'nav_programs'
-    }[page] || ('nav_'+page);
-
+    const navId = { destination_detail:'nav_destinations', program_detail:'nav_programs' }[page] || ('nav_'+page);
     go(page, document.getElementById(navId), false);
 
   } catch(e) {
-    go('dashboard', document.getElementById('nav_dashboard'), false);
+    render('dashboard');
   }
 }
 
