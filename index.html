@@ -568,8 +568,8 @@ function migrateDB(db) {
 //    );
 //    insert into lulu_data (id, data) values ('main', '{}');
 // 3. Go to Settings → API and copy your URL + anon key below:
-const SUPA_URL = '';   // ← e.g. https://xxxx.supabase.co
-const SUPA_KEY = '';   // ← anon public key (starts with eyJ...)
+const SUPA_URL = 'https://dxxoxcplklycsqvdvbqo.supabase.co/rest/v1/';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eG94Y3Bsa2x5Y3NxdmR2YnFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTk4NDMsImV4cCI6MjA5NzAzNTg0M30.FQbit5LlzEkNPJm4v2gewIn5LWB4pSSp69Cmrt1_Gt4';
 const SK = 'byherhub_v2_local';
 
 let cloudEnabled = !!(SUPA_URL && SUPA_KEY);
