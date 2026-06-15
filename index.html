@@ -1586,7 +1586,7 @@ function generateTimeOptions(endTime, minTime, selected) {
 function applyExpFilter(destId) {
   const payerF = document.getElementById('expPayerFilter')?.value||'';
   const paidF  = document.getElementById('expPaidFilter')?.value||'';
-  const exps = DB.expenses.filter(e=>e.destId===destId && !e._fromBooking);
+  const exps = DB.expenses.filter(e=>e.destId===destId);
   fillDestBudget(exps, destId, payerF, paidF);
 }
 
@@ -1687,19 +1687,19 @@ function fillDestBudget(exps, destId, payerFilter, paidFilter) {
   // Manual expenses (exclude any that were auto-created from bookings, to avoid double-counting)
   const manualExps = exps.filter(e=>!e._fromBooking);
 
-  // Combined list
-  // Apply filters to manual expenses only
-  let manualFiltered = manualExps;
-  if(payerFilter==='Me')     manualFiltered = manualFiltered.filter(e=>!e.paidBy || e.paidBy.trim()==='' || e.paidBy.trim()==='Me');
-  else if(payerFilter==='others') manualFiltered = manualFiltered.filter(e=>e.paidBy && e.paidBy.trim()!=='' && e.paidBy.trim()!=='Me');
-  if(paidFilter==='paid')   manualFiltered = manualFiltered.filter(e=>e.paid===true);
-  else if(paidFilter==='unpaid') manualFiltered = manualFiltered.filter(e=>!e.paid);
+  // Combine booking entries + manual expenses
+  let allEntries = [...bookingEntries, ...manualExps];
 
-  // Sort chronologically: by date asc, then by booking time asc
-  const allEntries = [...bookingEntries, ...manualFiltered].sort((a,b)=>{
+  // Apply payer + paid filters to the full combined list
+  if(payerFilter==='Me')          allEntries = allEntries.filter(e=>!e.paidBy || e.paidBy.trim()==='' || e.paidBy.trim()==='Me');
+  else if(payerFilter==='others') allEntries = allEntries.filter(e=>e.paidBy && e.paidBy.trim()!=='' && e.paidBy.trim()!=='Me');
+  if(paidFilter==='paid')         allEntries = allEntries.filter(e=>e.paid===true);
+  else if(paidFilter==='unpaid')  allEntries = allEntries.filter(e=>!e.paid);
+
+  // Sort chronologically: by date asc, then by time
+  allEntries = allEntries.sort((a,b)=>{
     const dateCmp = (a.date||'').localeCompare(b.date||'');
     if(dateCmp!==0) return dateCmp;
-    // secondary sort by time (checkInTime for accommodation, bookingTime for others)
     const aTime = a._bookingId ? (DB.bookings.find(x=>x.id===a._bookingId)||{}).checkInTime||'00:00' : '00:00';
     const bTime = b._bookingId ? (DB.bookings.find(x=>x.id===b._bookingId)||{}).checkInTime||'00:00' : '00:00';
     return aTime.localeCompare(bTime);
