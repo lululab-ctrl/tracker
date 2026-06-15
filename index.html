@@ -3093,19 +3093,13 @@ function fillIncomeList() {
     return;
   }
   el.innerHTML = DB.budgetIncome.map(i=>{
-    const schedLabel = {monthly:'Monthly',split:'Split paydays',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
+    const schedLabel = {monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
     let schedDetail = '';
     if(i.paySchedule==='split') {
       schedDetail = `
-        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-          <div style="flex:1;min-width:110px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px">
-            <div style="font-size:.62rem;color:var(--text-light);margin-bottom:2px">Day ${i.day1||15}</div>
-            <div style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</div>
-          </div>
-          <div style="flex:1;min-width:110px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px">
-            <div style="font-size:.62rem;color:var(--text-light);margin-bottom:2px">Day ${i.day2||30}</div>
-            <div style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt2)}</div>
-          </div>
+        <div style="margin-top:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px;display:inline-flex;gap:10px;align-items:center">
+          <span style="font-size:.62rem;color:var(--text-light)">Day ${i.day1||15}</span>
+          <span style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</span>
         </div>`;
     }
     return `
@@ -3278,13 +3272,9 @@ function addDays(dateStr, days) {
 
 function openIncomeModal(id) {
   const item = id ? DB.budgetIncome.find(x=>x.id===id)||{} : {};
-  const isSplit = item.paySchedule === 'split' || (!id); // default new entries to split
   const schedule = item.paySchedule || 'split';
 
   openModal(id?'Edit Income':'Add Income Source', `
-    <div class="form-group"><label class="form-label">Label</label>
-      <input class="form-input" id="f_ilabel" placeholder="e.g. Salary, Freelance, Business" value="${item.label||''}">
-    </div>
     <div class="fr2">
       <div class="form-group"><label class="form-label">Type</label>
         <select class="form-select" id="f_itype">
@@ -3293,10 +3283,10 @@ function openIncomeModal(id) {
       </div>
       <div class="form-group"><label class="form-label">Payment Schedule</label>
         <select class="form-select" id="f_ischedule" onchange="updateIncomeFields(this.value)">
-          <option value="monthly" ${schedule==='monthly'?'selected':''}>Once a month</option>
-          <option value="split" ${schedule==='split'||!id?'selected':''}>Split (e.g. 15th & 30th)</option>
+          <option value="monthly"  ${schedule==='monthly' ?'selected':''}>Once a month</option>
+          <option value="split"    ${schedule==='split'||!id?'selected':''}>Bi-monthly</option>
           <option value="biweekly" ${schedule==='biweekly'?'selected':''}>Every 2 weeks</option>
-          <option value="weekly" ${schedule==='weekly'?'selected':''}>Weekly</option>
+          <option value="weekly"   ${schedule==='weekly'  ?'selected':''}>Weekly</option>
         </select>
       </div>
     </div>
@@ -3308,33 +3298,27 @@ function openIncomeModal(id) {
       </div>
     </div>
 
-    <!-- SPLIT: two paydays -->
+    <!-- BI-MONTHLY: single payday dropdown + amount -->
     <div id="inc_split" style="display:${schedule==='split'||!id?'block':'none'}">
-      <div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px">Enter the amount you receive on each payday.</div>
+      <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">Select a payday and enter the amount received. Add both the 15th and 30th entries separately.</div>
       <div class="fr2">
         <div class="form-group">
-          <label class="form-label">1st Payday — Day of Month</label>
-          <input class="form-input" id="f_iday1" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.day1||'15'}">
+          <label class="form-label">Payday</label>
+          <select class="form-select" id="f_iday1">
+            <option value="15" ${(item.day1||'15')==='15'?'selected':''}>15th</option>
+            <option value="30" ${item.day1==='30'?'selected':''}>30th</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Amount (₱)</label>
           <input class="form-input" id="f_iamt1" type="number" step="0.01" placeholder="0.00" value="${item.amt1||''}">
         </div>
       </div>
-      <div class="fr2">
-        <div class="form-group">
-          <label class="form-label">2nd Payday — Day of Month</label>
-          <input class="form-input" id="f_iday2" type="number" min="1" max="31" placeholder="e.g. 30" value="${item.day2||'30'}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Amount (₱)</label>
-          <input class="form-input" id="f_iamt2" type="number" step="0.01" placeholder="0.00" value="${item.amt2||''}">
-        </div>
+      <div id="split_total" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:.78rem;color:var(--text-mid);display:flex;justify-content:space-between;margin-top:4px">
+        <span>Amount entered</span>
+        <span style="font-family:var(--font-display);color:var(--green);font-size:1rem">₱${(parseFloat(item.amt1)||0).toLocaleString('en',{minimumFractionDigits:2})}</span>
       </div>
-      <div id="split_total" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:.78rem;color:var(--text-mid);display:flex;justify-content:space-between">
-        <span>Monthly total</span>
-        <span style="font-family:var(--font-display);color:var(--green);font-size:1rem">₱${((parseFloat(item.amt1)||0)+(parseFloat(item.amt2)||0)).toLocaleString('en',{minimumFractionDigits:2})}</span>
-      </div>
+      <div style="font-size:.7rem;color:var(--text-light);margin-top:8px">💡 Add a separate entry for the other payday (e.g. if this is the 15th, add another for the 30th).</div>
     </div>
 
     <!-- BIWEEKLY / WEEKLY -->
@@ -3349,16 +3333,14 @@ function openIncomeModal(id) {
     </div>
   `, () => {
     const schedule = fv('f_ischedule');
-    let amount, amt1, amt2, day1, day2, amtPer;
+    let amount, amt1, day1, amtPer;
     if(schedule === 'split') {
-      amt1 = parseFloat(fv('f_iamt1'))||0;
-      amt2 = parseFloat(fv('f_iamt2'))||0;
-      day1 = fv('f_iday1')||'15';
-      day2 = fv('f_iday2')||'30';
-      amount = amt1 + amt2;
+      amt1   = parseFloat(fv('f_iamt1'))||0;
+      day1   = fv('f_iday1')||'15';
+      amount = amt1;
     } else if(schedule === 'biweekly') {
       amtPer = parseFloat(fv('f_iamtp'))||0;
-      amount = amtPer * 2.167; // avg months per year / 26 paydays
+      amount = amtPer * 2.167;
     } else if(schedule === 'weekly') {
       amtPer = parseFloat(fv('f_iamtp'))||0;
       amount = amtPer * 4.333;
@@ -3366,9 +3348,9 @@ function openIncomeModal(id) {
       amount = parseFloat(fv('f_iamt'))||0;
     }
     const obj = {
-      id:id||uid(), label:fv('f_ilabel'), type:fv('f_itype'),
+      id:id||uid(), type:fv('f_itype'),
       paySchedule:schedule, amount:amount.toFixed(2),
-      amt1, amt2, day1, day2, amtPer,
+      amt1, day1, amtPer,
       notes:fv('f_inotes')
     };
     if(id) { const i=DB.budgetIncome.findIndex(x=>x.id===id); DB.budgetIncome[i]=obj; }
@@ -3385,7 +3367,15 @@ function updateIncomeFields(schedule) {
   if(lbl) lbl.textContent = `Amount per ${schedule==='weekly'?'week':'2 weeks'} (₱)`;
 }
 
-// live split total
+// live split total update
+document.addEventListener('input', e => {
+  if(e.target.id==='f_iamt1') {
+    const a1 = parseFloat(document.getElementById('f_iamt1')?.value||0);
+    const tot = document.getElementById('split_total');
+    if(tot) tot.querySelector('span:last-child').textContent = '₱'+a1.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+});
+
 // Auto-select number inputs on focus
 document.addEventListener('focusin', e => {
   if(e.target.type === 'number') {
