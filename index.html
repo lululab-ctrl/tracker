@@ -2953,7 +2953,7 @@ async function submitBudgetPw() {
   if(!input) return;
   const pw = input.value;
   const hash = await hashPassword(pw);
-  const correct = await hashPassword('$Jeinna1802$');
+  const correct = await hashPassword('200210');
   if(hash === correct) {
     budgetUnlocked = true;
     try { sessionStorage.setItem('lulu_budget_unlocked', '1'); } catch(e){}
@@ -3030,8 +3030,11 @@ function renderBudget(c) {
       const varExp = DB.budgetVarExp
         .filter(e=>(e.date||'').slice(0,7)===cur)
         .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-      // Net for this month: what's left after paying everything
-      const net = inc - rec - varExp;
+      const savExp = (DB.budgetSavings||[])
+        .filter(g=>(g.date||'').slice(0,7)===cur)
+        .reduce((s,g)=>s+parseFloat(g.amount||0),0);
+      // Net for this month: what's left after paying everything + savings set aside
+      const net = inc - rec - varExp - savExp;
       carry += net;
       // Advance one month
       const [y,m] = cur.split('-').map(Number);
@@ -3045,7 +3048,7 @@ function renderBudget(c) {
   // Current month then adds its own fresh income on top
   const carryover = computeCarryover(budgetMonth);
 
-  const totalOut    = totalRecurr + totalVar;
+  const totalOut    = totalRecurr + totalVar + totalSaved;
   const remaining   = totalIncome + carryover - totalOut;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3122,13 +3125,16 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Variable Expenses</span><span style="font-weight:600">₱${fmt(totalVar)}</span>
         </div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Savings (set aside)</span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
+        </div>
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--red)">
           <span>Total Out</span><span>₱${fmt(totalOut)}</span>
         </div>
       </div>
     </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance this month (Income + Carryover − Expenses)</span>
+      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance this month (Income + Carryover − Expenses − Savings)</span>
       <span style="font-family:var(--font-display);font-size:1.1rem;color:${remaining>=0?'var(--green)':'var(--red)'};font-weight:600">
         ${remaining>=0?'+':''}₱${remaining.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
       </span>
