@@ -1188,6 +1188,11 @@ function renderDestDetail(c) {
             <option value="">All Statuses</option>
             ${['booked','confirmed','completed','cancelled'].map(s=>`<option value="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
           </select>
+          <select class="form-select" id="bkPayerFilter" style="width:130px;font-size:.74rem" onchange="applyBookingFilter('${d.id}')">
+            <option value="">All Payers</option>
+            <option value="Me">Paid by Me</option>
+            <option value="others">Paid by Others</option>
+          </select>
           <button class="btn btn-primary btn-sm" onclick="openBookingModal(null,'${d.id}')">+ Add</button>
         </div>
       </div>
@@ -1572,16 +1577,19 @@ function generateTimeOptions(endTime, minTime, selected) {
 function applyExpFilter(destId) {
   const payerF = document.getElementById('expPayerFilter')?.value||'';
   const paidF  = document.getElementById('expPaidFilter')?.value||'';
-  const exps = DB.expenses.filter(e=>e.destId===destId);
+  const exps = DB.expenses.filter(e=>e.destId===destId && !e._fromBooking);
   fillDestBudget(exps, destId, payerF, paidF);
 }
 
 function applyBookingFilter(destId) {
   const typeF  = document.getElementById('bkTypeFilter')?.value||'';
   const statF  = document.getElementById('bkStatusFilter')?.value||'';
+  const payerF = document.getElementById('bkPayerFilter')?.value||'';
   let bks = DB.bookings.filter(b=>b.destId===destId);
   if(typeF)  bks = bks.filter(b=>b.type===typeF);
   if(statF)  bks = bks.filter(b=>b.status===statF);
+  if(payerF==='Me')     bks = bks.filter(b=>!b.paidBy || b.paidBy==='Me');
+  if(payerF==='others') bks = bks.filter(b=>b.paidBy && b.paidBy!=='Me');
   fillDestBookings(bks, destId);
 }
 
@@ -1669,11 +1677,11 @@ function fillDestBudget(exps, destId, payerFilter, paidFilter) {
   const manualExps = exps.filter(e=>!e._fromBooking);
 
   // Combined list
-  // Apply filters
+  // Apply filters to manual expenses only
   let manualFiltered = manualExps;
-  if(payerFilter==='Me') manualFiltered = manualFiltered.filter(e=>(e.paidBy||'Me')==='Me');
-  else if(payerFilter==='others') manualFiltered = manualFiltered.filter(e=>e.paidBy&&e.paidBy!=='Me');
-  if(paidFilter==='paid') manualFiltered = manualFiltered.filter(e=>e.paid);
+  if(payerFilter==='Me')     manualFiltered = manualFiltered.filter(e=>!e.paidBy || e.paidBy.trim()==='' || e.paidBy.trim()==='Me');
+  else if(payerFilter==='others') manualFiltered = manualFiltered.filter(e=>e.paidBy && e.paidBy.trim()!=='' && e.paidBy.trim()!=='Me');
+  if(paidFilter==='paid')   manualFiltered = manualFiltered.filter(e=>e.paid===true);
   else if(paidFilter==='unpaid') manualFiltered = manualFiltered.filter(e=>!e.paid);
 
   // Sort chronologically: by date asc, then by booking time asc
