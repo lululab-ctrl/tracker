@@ -2951,9 +2951,9 @@ function renderBudgetGate(c) {
 async function submitBudgetPw() {
   const input = document.getElementById('budgetPwInput');
   if(!input) return;
-  const hash = await hashPassword(input.value);
-  // Expected hash of '$Jeinna1802$' with our salt
-  const correct = await hashPassword('\$Jeinna1802\$');
+  const pw = input.value;
+  const hash = await hashPassword(pw);
+  const correct = await hashPassword('$Jeinna1802$');
   if(hash === correct) {
     budgetUnlocked = true;
     try { sessionStorage.setItem('lulu_budget_unlocked', '1'); } catch(e){}
@@ -2996,32 +2996,10 @@ function renderBudget(c) {
   const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
   const totalSaved  = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
 
-  // ── Carryover: compute net balance of the PREVIOUS month ──
-  function prevYM(ym) {
-    const [y,m] = ym.split('-').map(Number);
-    return m===1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
-  }
-  function netForMonth(ym) {
-    // income is always the same each month
-    const inc = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-    const rec = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
-    const varExp = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===ym)
-                     .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-    return inc - rec - varExp;
-  }
-  // Look up stored carryover for selected month, or compute from previous month
+  // ── Carryover: look up stored balance from previous month (set by migrateDB on month rollover) ──
   if(!DB.budgetCarryover) DB.budgetCarryover = {};
-  // carryover into the selected month = net of previous month + carryover that previous month had
-  function getCarryover(ym) {
-    if(!DB.budgetCarryover) return 0;
-    // if we have a stored carryover for this month, use it
-    if(DB.budgetCarryover[ym] !== undefined) return DB.budgetCarryover[ym];
-    // otherwise compute recursively (up to 12 months back)
-    const prev = prevYM(ym);
-    const prevCarry = getCarryover(prev);
-    return prevCarry + netForMonth(prev);
-  }
-  const carryover = getCarryover(budgetMonth);
+  // Just use whatever was stored for this month — computed once by migrateDB at month rollover
+  const carryover = parseFloat(DB.budgetCarryover[budgetMonth] || 0);
 
   const totalOut    = totalRecurr + totalVar;
   const remaining   = totalIncome + carryover - totalOut;
