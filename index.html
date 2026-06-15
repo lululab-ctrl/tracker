@@ -2994,7 +2994,11 @@ function renderBudget(c) {
     const d = (i.day1||'').slice(0,7); // day1 is the actual payday date YYYY-MM-DD
     return d === budgetMonth;
   });
-  const totalIncome = incomeForMonth.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  const regularIncome   = incomeForMonth.filter(i=>i.type !== 'Freelance');
+  const freelanceIncome = incomeForMonth.filter(i=>i.type === 'Freelance');
+  const totalRegular    = regularIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  const totalFreelance  = freelanceIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  const totalIncome     = totalRegular + totalFreelance;
   // Recurring always counts (monthly fixed bills)
   const totalRecurr = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   // Variable expenses filtered to selected month
@@ -3103,8 +3107,12 @@ function renderBudget(c) {
       <div style="background:var(--green-bg);border-radius:var(--radius-sm);padding:12px 14px">
         <div style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:6px">💰 Credits (Money In)</div>
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
-          <span>Monthly Income</span><span style="font-weight:600">₱${fmt(totalIncome)}</span>
+          <span>Monthly Income</span><span style="font-weight:600">₱${fmt(totalRegular)}</span>
         </div>
+        ${totalFreelance>0?`
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Part-Time Income</span><span style="font-weight:600">₱${fmt(totalFreelance)}</span>
+        </div>`:''}
         ${carryover!==0?`
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span style="color:${carryover>=0?'var(--green)':'var(--red)'}">Carried over from previous month</span>
