@@ -266,6 +266,11 @@ tr:hover td{background:var(--surface2)}
 .edit-btn{background:#6A9050;color:#fff}
 .del-btn{background:#B85858;color:#fff}
 
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -896,7 +901,7 @@ function renderDashboard(c) {
     <div class="card card-sm">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="width:34px;height:34px;border-radius:10px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:1rem">💸</div>
-        <span style="font-size:1.8rem;font-family:var(--font-display);color:var(--text)">$${spend.toFixed(0)}</span>
+        <span style="font-size:1.8rem;font-family:var(--font-display);color:var(--text)">₱${spend.toFixed(0)}</span>
       </div>
       <div class="stat-label">Total Spend</div>
       <div class="stat-sub">all trips combined</div>
@@ -1174,7 +1179,7 @@ function renderDestDetail(c) {
     </div>
     <div class="dest-hero-stats">
       <div class="dest-hero-stat"><div class="dest-hero-stat-val">${bks.length}</div><div class="dest-hero-stat-label">Bookings</div></div>
-      <div class="dest-hero-stat"><div class="dest-hero-stat-val">$${totalSpend.toFixed(0)}</div><div class="dest-hero-stat-label">Total Spend</div></div>
+      <div class="dest-hero-stat"><div class="dest-hero-stat-val">₱${totalSpend.toFixed(0)}</div><div class="dest-hero-stat-label">Total Spend</div></div>
       <div class="dest-hero-stat"><div class="dest-hero-stat-val">${mems.length}</div><div class="dest-hero-stat-label">Memories</div></div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center;position:relative;z-index:2">
@@ -1764,34 +1769,32 @@ function fillDestBudget(exps, destId, payerFilter, paidFilter) {
 
 function fillDestPacking(packs, destId) {
   const el=document.getElementById('packContent'); if(!el) return;
+  const catEmoji = {
+    'Clothing':'👗','Toiletries':'🪥','Hygiene':'🧴','Gadgets':'📱','Documents':'📄',
+    'Medicines':'💊','Shoes':'👟','Accessories':'👜','Snacks':'🍬','General':'📦','Other':'◈'
+  };
+
   if(!packs.length){
     el.innerHTML=`
-      <div class="empty"><div class="empty-icon">◻</div><p>No packing lists yet.</p></div>
+      <div class="empty"><div class="empty-icon">🧳</div><p>No packing list yet.</p></div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="openPackingModal('${destId}')">+ Custom List</button>
-        <button class="btn btn-ghost" onclick="openSmartPackModal('${destId}')">✦ Smart Pack (Categorized)</button>
+        <button class="btn btn-ghost" onclick="openSmartPackModal('${destId}')">✦ Smart Pack</button>
       </div>`;
     return;
   }
 
-  el.innerHTML='';
-  // Header with both add options
-  const hdr = document.createElement('div');
-  hdr.style.cssText='display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap';
-  hdr.innerHTML=`
+  el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
     <button class="btn btn-primary btn-sm" onclick="openPackingModal('${destId}')">+ Custom List</button>
-    <button class="btn btn-ghost btn-sm" onclick="openSmartPackModal('${destId}')">✦ Smart Pack</button>`;
-  el.appendChild(hdr);
-
-  const grid=document.createElement('div'); grid.className='grid-2'; el.appendChild(grid);
+    <button class="btn btn-ghost btn-sm" onclick="openSmartPackModal('${destId}')">✦ Smart Pack</button>
+  </div>`;
 
   packs.forEach(pl=>{
     const allItems = pl.items||[];
     const packed = allItems.filter(i=>i.packed).length;
     const pct = allItems.length ? Math.round(packed/allItems.length*100) : 0;
-    const card=document.createElement('div'); card.className='card'; card.style.marginBottom='0';
 
-    // Group items by category
+    // Group by category
     const categories = {};
     allItems.forEach((item,idx)=>{
       const cat = item.category||'General';
@@ -1799,57 +1802,104 @@ function fillDestPacking(packs, destId) {
       categories[cat].push({...item,_idx:idx});
     });
 
-    const catEmoji = {
-      'Clothing':'👗','Toiletries':'🪥','Gadgets':'📱','Documents':'📄',
-      'Medicines':'💊','Shoes':'👟','Accessories':'👜','Snacks':'🍬',
-      'General':'📦','Other':'◈'
-    };
-
-    const catHtml = Object.entries(categories).map(([cat,items])=>`
-      <div style="margin-bottom:12px">
-        <div style="font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:5px">
-          <span>${catEmoji[cat]||'◈'}</span>${cat}
-          <span style="font-size:.6rem;color:var(--text-light);font-weight:400">(${items.filter(i=>i.packed).length}/${items.length})</span>
+    const catSections = Object.entries(categories).map(([cat,items])=>`
+      <div style="margin-bottom:16px">
+        <div style="font-size:.63rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:7px;display:flex;align-items:center;gap:5px">
+          <span>${catEmoji[cat]||'◈'}</span> ${cat}
+          <span style="font-size:.6rem;font-weight:400;opacity:.7">(${items.filter(i=>i.packed).length}/${items.length})</span>
         </div>
         ${items.map(item=>`
-          <div class="pack-item" style="padding:7px 0">
-            <input type="checkbox" ${item.packed?'checked':''} onchange="togglePack('${pl.id}',${item._idx},this.checked)" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0">
-            <span class="pack-item-name${item.packed?' done':''}" style="flex:1">
-              ${item.name}${item.qty&&item.qty>1?`<span style="font-size:.68rem;color:var(--accent);margin-left:4px;font-weight:600">×${item.qty}</span>`:''}
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--border-light)">
+            <input type="checkbox" ${item.packed?'checked':''}
+              onchange="togglePack('${pl.id}',${item._idx},this.checked)"
+              style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0;cursor:pointer">
+            <span style="flex:1;font-size:.81rem;${item.packed?'text-decoration:line-through;color:var(--text-light)':'color:var(--text)'}">
+              ${item.name}${item.qty&&item.qty>1?`<span style="font-size:.67rem;color:var(--accent);margin-left:4px;font-weight:600">×${item.qty}</span>`:''}
             </span>
-            <button onclick="removePackItem('${pl.id}',${item._idx},'${destId}')" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:.7rem;padding:2px 4px;opacity:0" class="pack-del-btn">✕</button>
+            <button onclick="removePackItem('${pl.id}',${item._idx},'${destId}')"
+              style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:.75rem;padding:2px 5px;line-height:1;border-radius:4px;transition:color .14s"
+              onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-light)'">✕</button>
           </div>`).join('')}
       </div>`).join('');
 
-    card.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '16px';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-family:var(--font-display);font-size:1.05rem">${pl.name}</div>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="badge ${pct===100?'b-green':'b-gray'}">${packed}/${allItems.length}</span>
+          <button class="btn btn-ghost btn-sm" onclick="editPackListModal('${pl.id}','${destId}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="delItem('packingLists','${pl.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
         </div>
       </div>
-      <div class="prog-bar" style="margin-bottom:14px"><div class="prog-fill" style="width:${pct}%;${pct===100?'background:var(--green)':''}"></div></div>
-      <div style="max-height:340px;overflow-y:auto;margin-bottom:10px">${catHtml}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        <input class="form-input" id="pi_${pl.id}" placeholder="Add item..." style="flex:1;min-width:100px;padding:6px 10px;font-size:.75rem" onkeydown="if(event.key==='Enter')addPackItem('${pl.id}','${destId}')">
-        <select class="form-select" id="pc_${pl.id}" style="width:110px;font-size:.72rem">
-          ${['General','Clothing','Toiletries','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(c=>`<option>${c}</option>`).join('')}
-        </select>
-        <input class="form-input" id="pq_${pl.id}" type="number" min="1" placeholder="Qty" style="width:56px;padding:6px 8px;font-size:.75rem" value="1">
-        <button class="btn btn-primary btn-sm" onclick="addPackItem('${pl.id}','${destId}')">Add</button>
+      <div class="prog-bar" style="margin-bottom:14px">
+        <div class="prog-fill" style="width:${pct}%;${pct===100?'background:var(--green)':''}"></div>
+      </div>
+      <div style="max-height:460px;overflow-y:auto;padding-right:2px">${catSections}</div>
+      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+        <div style="font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">Add Item</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input class="form-input" id="pi_${pl.id}" placeholder="Item name..."
+            style="flex:1;min-width:110px;padding:7px 10px;font-size:.78rem"
+            onkeydown="if(event.key==='Enter')addPackItem('${pl.id}','${destId}')">
+          <select class="form-select" id="pc_${pl.id}" style="width:118px;font-size:.74rem">
+            ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option>${cat}</option>`).join('')}
+          </select>
+          <input class="form-input" id="pq_${pl.id}" type="number" min="1" value="1"
+            style="width:54px;padding:7px 8px;font-size:.78rem;text-align:center">
+          <button class="btn btn-primary btn-sm" onclick="addPackItem('${pl.id}','${destId}')">+ Add</button>
+        </div>
       </div>`;
-
-    // hover show delete btn
-    card.querySelectorAll && setTimeout(()=>{
-      card.querySelectorAll('.pack-del-btn').forEach(btn=>{
-        btn.parentElement.addEventListener('mouseenter',()=>btn.style.opacity='1');
-        btn.parentElement.addEventListener('mouseleave',()=>btn.style.opacity='0');
-      });
-    },0);
-
-    grid.appendChild(card);
+    el.appendChild(card);
   });
+}
+
+// Edit entire packing list — rename + add/remove items
+function editPackListModal(listId, destId) {
+  const pl = DB.packingLists.find(l=>l.id===listId);
+  if(!pl) return;
+  openModal('Edit Packing List', `
+    <div class="form-group"><label class="form-label">List Name</label>
+      <input class="form-input" id="f_plname" value="${pl.name}">
+    </div>
+    <div style="max-height:320px;overflow-y:auto;margin-bottom:12px">
+      ${(pl.items||[]).map((item,idx)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--border-light)">
+          <span style="flex:1;font-size:.8rem;color:var(--text)">${item.name}${item.qty>1?` ×${item.qty}`:''} <span style="font-size:.65rem;color:var(--text-light)">${item.category||''}</span></span>
+          <button onclick="removePackItemInline(${idx},'${listId}','${destId}')"
+            style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:.75rem;padding:2px 6px"
+            onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-light)'">✕</button>
+        </div>`).join('')}
+    </div>
+    <div class="form-group"><label class="form-label">Add Items (one per line)</label>
+      <textarea class="form-textarea" id="f_plitems" rows="3" placeholder="New item&#10;Another item"></textarea>
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Category for new items</label>
+        <select class="form-select" id="f_plcat">
+          ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option>${cat}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  `, () => {
+    pl.name = fv('f_plname')||pl.name;
+    const newItems = fv('f_plitems').split('\n').filter(Boolean);
+    const cat = fv('f_plcat')||'General';
+    newItems.forEach(n=>pl.items.push({name:n.trim(),packed:false,category:cat,qty:1}));
+    save(); closeModal(); openDest(destId, currentDestTab);
+  });
+}
+
+function removePackItemInline(idx, listId, destId) {
+  const pl = DB.packingLists.find(l=>l.id===listId);
+  if(!pl) return;
+  pl.items.splice(idx,1);
+  save();
+  // re-open same modal
+  closeModal();
+  setTimeout(()=>editPackListModal(listId, destId), 50);
 }
 
 function fillDestDocs(docs, destId) {
@@ -2198,56 +2248,90 @@ function calcExpSplit() {
 }
 
 function openPackingModal(destId) {
-  openModal('New Packing List',`
-    <div class="form-group"><label class="form-label">List Name</label>
-      <input class="form-input" id="f_pn" placeholder="e.g. Malaysia Essentials">
-    </div>
-    <div class="form-group"><label class="form-label">Items (one per line)</label>
-      <textarea class="form-textarea" id="f_pi" rows="5" placeholder="Passport&#10;Travel adapter&#10;Medications&#10;Camera&#10;Sunscreen"></textarea>
-    </div>
-    <div class="form-group"><label class="form-label">Default Category for these items</label>
-      <select class="form-select" id="f_pcat">
-        ${['General','Clothing','Toiletries','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(c=>`<option>${c}</option>`).join('')}
-      </select>
-    </div>
-  `,()=>{
-    const cat = fv('f_pcat')||'General';
-    const items=fv('f_pi').split('\n').filter(Boolean).map(n=>({name:n.trim(),packed:false,category:cat,qty:1}));
-    DB.packingLists.push({id:uid(),destId,name:fv('f_pn'),items});
-    save(); closeModal(); openDest(destId, currentDestTab);
-  });
-}
-
-function openSmartPackModal(destId) {
-  const templates = {
+  const PACK_TEMPLATES = {
     'Clothing':['T-shirts','Pants/Jeans','Shorts','Dress/Outfit','Underwear','Socks','Sleepwear','Swimwear'],
-    'Toiletries':['Toothbrush','Toothpaste','Shampoo','Conditioner','Body wash','Deodorant','Moisturizer','Sunscreen','Face wash','Razor'],
+    'Toiletries':['Toothbrush','Toothpaste','Shampoo','Conditioner','Body wash','Deodorant','Moisturizer','Face wash','Razor'],
+    'Hygiene':['Sunscreen','Hand sanitizer','Wet wipes','Tissue/Facial tissue','Mints/Breath freshener','Perfume/Body spray','Dry shampoo','Cotton pads','Feminine pads/tampons','Lip balm'],
     'Gadgets':['Phone charger','Power bank','Earphones/AirPods','Camera','Laptop','Travel adapter','USB cable'],
     'Documents':['Passport','Printed tickets','Hotel confirmation','Travel insurance','Visa','ID card'],
     'Medicines':['Paracetamol','Motion sickness pills','Band-aids','Antacid','Vitamin C'],
     'Accessories':['Sunglasses','Watch','Belt','Bag/Tote','Umbrella'],
     'Snacks':['Snack bars','Instant noodles','Nuts/chips','Water bottle'],
   };
+  const catEmojis = {'Clothing':'👗','Toiletries':'🪥','Hygiene':'🧴','Gadgets':'📱','Documents':'📄','Medicines':'💊','Accessories':'👜','Snacks':'🍬'};
+
+  openModal('New Custom List', `
+    <div class="form-group"><label class="form-label">List Name</label>
+      <input class="form-input" id="f_pn" placeholder="e.g. My Essentials">
+    </div>
+    <p style="font-size:.74rem;color:var(--text-light);margin-bottom:12px;line-height:1.6">All Smart Pack items are pre-loaded below. Check the ones you want to include, then add any extras.</p>
+    ${Object.entries(PACK_TEMPLATES).map(([cat,items])=>`
+      <div style="margin-bottom:14px">
+        <div style="font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:7px">${catEmojis[cat]||'◈'} ${cat}</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${items.map(item=>`
+            <label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;font-size:.78rem">
+              <input type="checkbox" data-item="${item}" data-cat="${cat}" style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0">
+              ${item}
+            </label>`).join('')}
+        </div>
+      </div>`).join('')}
+    <div class="form-group" style="margin-top:8px"><label class="form-label">Additional Items (one per line)</label>
+      <textarea class="form-textarea" id="f_pi" rows="3" placeholder="Extra item&#10;Another item"></textarea>
+    </div>
+    <div class="form-group"><label class="form-label">Category for additional items</label>
+      <select class="form-select" id="f_pcat">
+        ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option>${cat}</option>`).join('')}
+      </select>
+    </div>
+  `, () => {
+    const listName = fv('f_pn') || 'Custom List';
+    const items = [];
+    document.querySelectorAll('[data-item][data-cat]').forEach(cb=>{
+      if(cb.checked) items.push({name:cb.dataset.item, category:cb.dataset.cat, qty:1, packed:false});
+    });
+    const cat = fv('f_pcat')||'General';
+    fv('f_pi').split('\n').filter(Boolean).forEach(n=>{
+      items.push({name:n.trim(), category:cat, qty:1, packed:false});
+    });
+    if(!items.length){ alert('Please select or add at least one item.'); return; }
+    DB.packingLists.push({id:uid(), destId, name:listName, items});
+    save(); closeModal(); openDest(destId, currentDestTab);
+  }, true, 'Create List');
+}
+
+function openSmartPackModal(destId) {
+  const PACK_TEMPLATES = {
+    'Clothing':['T-shirts','Pants/Jeans','Shorts','Dress/Outfit','Underwear','Socks','Sleepwear','Swimwear'],
+    'Toiletries':['Toothbrush','Toothpaste','Shampoo','Conditioner','Body wash','Deodorant','Moisturizer','Face wash','Razor'],
+    'Hygiene':['Sunscreen','Hand sanitizer','Wet wipes','Tissue/Facial tissue','Mints/Breath freshener','Perfume/Body spray','Dry shampoo','Cotton pads','Feminine pads/tampons','Lip balm'],
+    'Gadgets':['Phone charger','Power bank','Earphones/AirPods','Camera','Laptop','Travel adapter','USB cable'],
+    'Documents':['Passport','Printed tickets','Hotel confirmation','Travel insurance','Visa','ID card'],
+    'Medicines':['Paracetamol','Motion sickness pills','Band-aids','Antacid','Vitamin C'],
+    'Accessories':['Sunglasses','Watch','Belt','Bag/Tote','Umbrella'],
+    'Snacks':['Snack bars','Instant noodles','Nuts/chips','Water bottle'],
+  };
+  const catEmojis = {'Clothing':'👗','Toiletries':'🪥','Hygiene':'🧴','Gadgets':'📱','Documents':'📄','Medicines':'💊','Accessories':'👜','Snacks':'🍬'};
 
   openModal('✦ Smart Pack — Categorized', `
-    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Enter how many you need. Leave 0 to skip.</p>
     <div class="form-group"><label class="form-label">List Name</label>
-      <input class="form-input" id="f_spn" placeholder="e.g. Malaysia Trip" value="">
+      <input class="form-input" id="f_spn" placeholder="e.g. Malaysia Trip">
     </div>
-    ${Object.entries(templates).map(([cat,items])=>`
+    <p style="font-size:.74rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Enter quantities for items to include. Leave 0 to skip. You can add more items after.</p>
+    ${Object.entries(PACK_TEMPLATES).map(([cat,items])=>`
       <div style="margin-bottom:16px">
-        <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">${cat}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">${catEmojis[cat]||'◈'} ${cat}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
           ${items.map(item=>`
             <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--radius-sm);padding:6px 10px">
-              <span style="flex:1;font-size:.78rem;color:var(--text)">${item}</span>
-              <input type="number" min="0" value="0" style="width:44px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:.75rem;text-align:center;background:var(--surface)" data-item="${item}" data-cat="${cat}">
+              <span style="flex:1;font-size:.76rem;color:var(--text)">${item}</span>
+              <input type="number" min="0" value="0" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:3px 5px;font-size:.74rem;text-align:center;background:var(--surface)" data-item="${item}" data-cat="${cat}">
             </div>`).join('')}
         </div>
       </div>`).join('')}
-    <div style="margin-bottom:14px">
-      <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">Extra Items</div>
-      <textarea class="form-textarea" id="f_spextra" rows="2" placeholder="Other item, qty | Another item, qty"></textarea>
+    <div style="margin-bottom:4px">
+      <div style="font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">◈ Extra Items</div>
+      <textarea class="form-textarea" id="f_spextra" rows="2" placeholder="One per line — e.g. Rain jacket, 1"></textarea>
     </div>
   `, () => {
     const listName = fv('f_spn') || 'Packing List';
@@ -2256,18 +2340,16 @@ function openSmartPackModal(destId) {
       const qty = parseInt(inp.value)||0;
       if(qty > 0) items.push({name:inp.dataset.item, qty, category:inp.dataset.cat, packed:false});
     });
-    // Extra items
-    const extras = fv('f_spextra').split('\n').filter(Boolean);
-    extras.forEach(line=>{
+    fv('f_spextra').split('\n').filter(Boolean).forEach(line=>{
       const parts = line.split(',');
       const name = parts[0]?.trim();
       const qty = parseInt(parts[1])||1;
-      if(name) items.push({name, qty, category:'Other', packed:false});
+      if(name) items.push({name, qty, category:'General', packed:false});
     });
-    if(!items.length){ alert('Add at least one item.'); return; }
+    if(!items.length){ alert('Please set a quantity for at least one item.'); return; }
     DB.packingLists.push({id:uid(), destId, name:listName, items});
     save(); closeModal(); openDest(destId, currentDestTab);
-  }, true);
+  }, true, 'Create List');
 }
 
 function openDocModal(destId) {
@@ -2331,6 +2413,75 @@ function addPackItem(listId,destId) {
 function removePackItem(listId,idx,destId) {
   const pl=DB.packingLists.find(l=>l.id===listId);
   if(pl){pl.items.splice(idx,1);save();openDest(destId,currentDestTab);}
+}
+function editPackListModal(listId, destId) {
+  const pl = DB.packingLists.find(l=>l.id===listId);
+  if(!pl) return;
+  openModal('Edit Packing List', `
+    <div class="form-group"><label class="form-label">List Name</label>
+      <input class="form-input" id="f_plname" value="${pl.name}">
+    </div>
+    <div style="max-height:300px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-sm)">
+      ${(pl.items||[]).map((item,idx)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-light)">
+          <span style="flex:1;font-size:.8rem;color:var(--text)">${item.name}${item.qty>1?` ×${item.qty}`:''}</span>
+          <span style="font-size:.65rem;color:var(--text-light);margin-right:4px">${item.category||''}</span>
+          <button onclick="removePackItemEdit(${idx},'${listId}','${destId}')"
+            style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:.75rem;padding:2px 6px"
+            onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-light)'">✕</button>
+        </div>`).join('')||'<div style="padding:16px;text-align:center;color:var(--text-light);font-size:.8rem">No items</div>'}
+    </div>
+    <div class="form-group"><label class="form-label">Add Items (one per line)</label>
+      <textarea class="form-textarea" id="f_plitems" rows="3" placeholder="New item&#10;Another item"></textarea>
+    </div>
+    <div class="form-group"><label class="form-label">Category for new items</label>
+      <select class="form-select" id="f_plcat">
+        ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option>${cat}</option>`).join('')}
+      </select>
+    </div>
+  `, () => {
+    pl.name = fv('f_plname')||pl.name;
+    const newItems = fv('f_plitems').split('\n').filter(Boolean);
+    const cat = fv('f_plcat')||'General';
+    newItems.forEach(n=>pl.items.push({name:n.trim(),packed:false,category:cat,qty:1}));
+    save(); closeModal(); openDest(destId, currentDestTab);
+  });
+}
+
+function removePackItemEdit(idx, listId, destId) {
+  const pl = DB.packingLists.find(l=>l.id===listId);
+  if(!pl) return;
+  pl.items.splice(idx,1);
+  save();
+  closeModal();
+  setTimeout(()=>editPackListModal(listId, destId), 50);
+}
+
+
+function editPackItem(listId,idx,destId) {
+  const pl=DB.packingLists.find(l=>l.id===listId);
+  const item=pl?.items[idx];
+  if(!item) return;
+  openModal('Edit Item', `
+    <div class="form-group"><label class="form-label">Item Name</label>
+      <input class="form-input" id="f_ein" value="${item.name}">
+    </div>
+    <div class="fr2">
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="f_eic">
+          ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option${item.category===cat?' selected':''}>${cat}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Quantity</label>
+        <input class="form-input" id="f_eiq" type="number" min="1" value="${item.qty||1}">
+      </div>
+    </div>
+  `, () => {
+    item.name = fv('f_ein')||item.name;
+    item.category = fv('f_eic');
+    item.qty = parseInt(fv('f_eiq'))||1;
+    save(); closeModal(); openDest(destId, currentDestTab);
+  });
 }
 function delPhoto(memId,pi,destId) {
   const m=DB.memories.find(x=>x.id===memId);
@@ -3223,6 +3374,13 @@ function updateIncomeFields(schedule) {
 }
 
 // live split total
+// Auto-select number inputs on focus
+document.addEventListener('focusin', e => {
+  if(e.target.type === 'number') {
+    e.target.select();
+  }
+});
+
 document.addEventListener('input', e => {
   if(e.target.id==='f_iamt1'||e.target.id==='f_iamt2') {
     const a1 = parseFloat(document.getElementById('f_iamt1')?.value||0);
@@ -3592,6 +3750,312 @@ if(cloudEnabled) {
   restorePage();
   resetIdle();
 }
+</script>
+
+</body>
+</html>
+
+<!-- FLOATING CALCULATOR BUBBLE -->
+<div id="calcBubble" onclick="toggleCalc()" title="Calculator" style="
+  position:fixed;bottom:26px;right:26px;z-index:8000;
+  width:46px;height:46px;border-radius:50%;
+  background:rgba(255,255,255,0.72);
+  backdrop-filter:blur(8px);
+  border:1.5px solid rgba(184,88,112,0.18);
+  box-shadow:0 2px 12px rgba(60,40,20,0.12);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .18s;user-select:none;">
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="16" height="16" rx="3" stroke="#B85870" stroke-width="1.4"/>
+    <rect x="4.5" y="4.5" width="4" height="2.5" rx=".8" fill="#B85870" opacity=".7"/>
+    <rect x="11" y="4.5" width="2" height="2.5" rx=".8" fill="#A88870" opacity=".6"/>
+    <rect x="14" y="4.5" width="2" height="2.5" rx=".8" fill="#A88870" opacity=".6"/>
+    <rect x="4.5" y="8.5" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="8" y="8.5" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="11.5" y="8.5" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="15" y="8.5" width="1" height="2" rx=".5" fill="#A88870" opacity=".6"/>
+    <rect x="4.5" y="12" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="8" y="12" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="11.5" y="12" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="15" y="12" width="1" height="2" rx=".5" fill="#A88870" opacity=".6"/>
+    <rect x="4.5" y="15.5" width="5.5" height="2" rx=".6" fill="#B85870" opacity=".5"/>
+    <rect x="11.5" y="15.5" width="2" height="2" rx=".6" fill="#A88870" opacity=".6"/>
+    <rect x="15" y="15.5" width="1" height="2" rx=".5" fill="#A88870" opacity=".6"/>
+  </svg>
+</div>
+
+<div id="calcPanel" style="
+  display:none;position:fixed;bottom:82px;right:26px;z-index:8000;
+  width:268px;
+  background:rgba(253,250,247,0.97);
+  backdrop-filter:blur(12px);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);
+  overflow:hidden;">
+</div>
+
+<script>
+(function(){
+  // ── State ──
+  var expr = '0', hasResult = false;
+  var phpRate = null;
+  var activeTab = 'calc';
+
+  function toggleCalc() {
+    var p = document.getElementById('calcPanel');
+    var b = document.getElementById('calcBubble');
+    if(p.style.display === 'none') {
+      buildPanel();
+      p.style.display = 'block';
+      b.style.background = 'rgba(184,88,112,0.12)';
+      b.style.borderColor = 'rgba(184,88,112,0.4)';
+      fetchRate();
+    } else {
+      p.style.display = 'none';
+      b.style.background = 'rgba(255,255,255,0.72)';
+      b.style.borderColor = 'rgba(184,88,112,0.18)';
+    }
+  }
+  window.toggleCalc = toggleCalc;
+
+  function buildPanel() {
+    var p = document.getElementById('calcPanel');
+    p.innerHTML = '';
+
+    // Header tabs
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;border-bottom:1px solid var(--border)';
+
+    var tCalc = document.createElement('div');
+    tCalc.id = 'cTabCalc';
+    tCalc.textContent = 'Calculator';
+    tCalc.onclick = function(){ switchTab('calc'); };
+    styleTab(tCalc, activeTab==='calc');
+
+    var tConv = document.createElement('div');
+    tConv.id = 'cTabConv';
+    tConv.textContent = '₱ ↔ $';
+    tConv.onclick = function(){ switchTab('conv'); };
+    styleTab(tConv, activeTab==='conv');
+
+    var closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.onclick = toggleCalc;
+    closeBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--text-light);padding:8px 12px;font-size:.9rem';
+
+    hdr.appendChild(tCalc);
+    hdr.appendChild(tConv);
+    hdr.appendChild(closeBtn);
+    p.appendChild(hdr);
+
+    // Calc panel
+    var calcPane = document.createElement('div');
+    calcPane.id = 'cPaneCalc';
+    calcPane.style.display = activeTab==='calc' ? 'block' : 'none';
+    calcPane.style.padding = '12px';
+
+    // Display
+    var disp = document.createElement('div');
+    disp.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:10px;text-align:right;min-height:54px';
+    var exprEl = document.createElement('div');
+    exprEl.id = 'cExpr';
+    exprEl.style.cssText = 'font-size:.68rem;color:var(--text-light);min-height:16px;margin-bottom:2px';
+    var resEl = document.createElement('div');
+    resEl.id = 'cRes';
+    resEl.style.cssText = 'font-family:var(--font-display);font-size:1.6rem;color:var(--text);word-break:break-all';
+    resEl.textContent = expr;
+    disp.appendChild(exprEl);
+    disp.appendChild(resEl);
+    calcPane.appendChild(disp);
+
+    // Buttons grid
+    var grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:5px';
+
+    var rows = [
+      ['C','','','⌫'],
+      ['7','8','9','÷'],
+      ['4','5','6','×'],
+      ['1','2','3','−'],
+      ['0','.','=','+']
+    ];
+
+    rows.forEach(function(row){
+      row.forEach(function(k){
+        if(k === '') {
+          grid.appendChild(document.createElement('div'));
+          return;
+        }
+        var btn = document.createElement('button');
+        btn.textContent = k;
+        var base = 'border:none;border-radius:var(--radius-sm);padding:11px 6px;font-size:.88rem;cursor:pointer;font-family:var(--font-body);width:100%;transition:background .1s;';
+        if(k === '=') {
+          btn.style.cssText = base + 'background:var(--accent);color:#fff;font-weight:600;';
+          btn.onmouseover = function(){ this.style.background='var(--accent-hover)'; };
+          btn.onmouseout  = function(){ this.style.background='var(--accent)'; };
+          btn.onclick = doEqual;
+        } else if(k === 'C') {
+          btn.style.cssText = base + 'background:var(--red-bg);color:var(--red);font-weight:600;border:1px solid rgba(184,88,88,.2)';
+          btn.onclick = doClear;
+        } else if(k === '⌫') {
+          btn.style.cssText = base + 'background:var(--surface2);color:var(--text-mid);border:1px solid var(--border)';
+          btn.onclick = doBack;
+        } else if('÷×−+'.indexOf(k) !== -1) {
+          btn.style.cssText = base + 'background:var(--accent-light);color:var(--accent);font-weight:600;border:1px solid rgba(184,88,112,.15)';
+          btn.onmouseover = function(){ this.style.background='rgba(184,88,112,.15)'; };
+          btn.onmouseout  = function(){ this.style.background='var(--accent-light)'; };
+          (function(key){ btn.onclick = function(){ doOp(key); }; })(k);
+        } else {
+          btn.style.cssText = base + 'background:var(--surface);color:var(--text);border:1px solid var(--border);font-weight:500';
+          btn.onmouseover = function(){ this.style.background='var(--surface2)'; };
+          btn.onmouseout  = function(){ this.style.background='var(--surface)'; };
+          (function(key){ btn.onclick = function(){ doDigit(key); }; })(k);
+        }
+        grid.appendChild(btn);
+      });
+    });
+
+    calcPane.appendChild(grid);
+    p.appendChild(calcPane);
+
+    // Converter panel
+    var convPane = document.createElement('div');
+    convPane.id = 'cPaneConv';
+    convPane.style.display = activeTab==='conv' ? 'block' : 'none';
+    convPane.style.padding = '14px';
+
+    convPane.innerHTML =
+      '<div id="cRateLabel" style="font-size:.68rem;color:var(--text-light);text-align:center;margin-bottom:12px">Fetching live rate...</div>' +
+      '<div style="margin-bottom:10px"><div style="font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:5px">PHP (₱)</div>' +
+      '<input type="number" id="cPhp" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromPhp()"></div>' +
+      '<div style="text-align:center;color:var(--text-light);margin-bottom:10px;font-size:1.1rem">⇅</div>' +
+      '<div style="margin-bottom:10px"><div style="font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:5px">USD ($)</div>' +
+      '<input type="number" id="cUsd" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromUsd()"></div>' +
+      '<div id="cConvInfo" style="font-size:.65rem;color:var(--text-light);text-align:center"></div>';
+
+    p.appendChild(convPane);
+  }
+
+  function styleTab(el, active) {
+    el.style.cssText = 'flex:1;padding:10px 6px;text-align:center;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .14s;' +
+      (active ? 'color:var(--accent);border-bottom:2px solid var(--accent)' : 'color:var(--text-light);border-bottom:2px solid transparent');
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    var c = document.getElementById('cPaneCalc');
+    var v = document.getElementById('cPaneConv');
+    var tc = document.getElementById('cTabCalc');
+    var tv = document.getElementById('cTabConv');
+    if(c) c.style.display = tab==='calc' ? 'block' : 'none';
+    if(v) v.style.display = tab==='conv' ? 'block' : 'none';
+    if(tc) styleTab(tc, tab==='calc');
+    if(tv) styleTab(tv, tab==='conv');
+    if(tab==='conv') fetchRate();
+  }
+  window.switchTab = switchTab;
+
+  // Calc functions
+  function updateDisplay() {
+    var r = document.getElementById('cRes');
+    if(r) r.textContent = expr.length > 16 ? expr.slice(-16) : expr;
+  }
+  function doDigit(d) {
+    if(hasResult) { expr = (d==='.' ? '0' : '') + d; hasResult = false; }
+    else if(expr==='0' && d!=='.') expr = d;
+    else expr += d;
+    updateDisplay();
+  }
+  function doOp(op) {
+    hasResult = false;
+    var last = expr.slice(-1);
+    if('÷×−+'.indexOf(last) !== -1) expr = expr.slice(0,-1) + op;
+    else expr += op;
+    updateDisplay();
+  }
+  function doEqual() {
+    try {
+      var e2 = expr.split('÷').join('/').split('×').join('*').split('−').join('-');
+      var res = Function('"use strict";return (' + e2 + ')')();
+      var exEl = document.getElementById('cExpr');
+      if(exEl) exEl.textContent = expr + ' =';
+      expr = String(parseFloat(res.toFixed(10)));
+      hasResult = true;
+      updateDisplay();
+    } catch(err) { expr = 'Error'; updateDisplay(); }
+  }
+  function doClear() {
+    expr = '0'; hasResult = false;
+    var exEl = document.getElementById('cExpr');
+    if(exEl) exEl.textContent = '';
+    updateDisplay();
+  }
+  function doBack() {
+    if(hasResult){ doClear(); return; }
+    expr = expr.slice(0,-1) || '0';
+    updateDisplay();
+  }
+
+  // Keyboard
+  document.addEventListener('keydown', function(e) {
+    var p = document.getElementById('calcPanel');
+    if(!p || p.style.display==='none') return;
+    if(activeTab !== 'calc') return;
+    if('0123456789.'.indexOf(e.key) !== -1) doDigit(e.key);
+    else if(e.key==='+') doOp('+');
+    else if(e.key==='-') doOp('−');
+    else if(e.key==='*') doOp('×');
+    else if(e.key==='/') { e.preventDefault(); doOp('÷'); }
+    else if(e.key==='Enter'||e.key==='=') doEqual();
+    else if(e.key==='Backspace') doBack();
+    else if(e.key==='Escape') toggleCalc();
+  });
+
+  // Currency
+  async function fetchRate() {
+    if(phpRate) { updateRateDisplay(); return; }
+    try {
+      var r = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      var data = await r.json();
+      if(data.rates && data.rates.PHP) {
+        phpRate = 1 / data.rates.PHP;
+        updateRateDisplay(data.date);
+      }
+    } catch(ex) {
+      phpRate = 1/56.5;
+      var rl = document.getElementById('cRateLabel');
+      if(rl) rl.textContent = '≈ ₱1 = $' + phpRate.toFixed(5) + ' (approx)';
+      var ci = document.getElementById('cConvInfo');
+      if(ci) ci.textContent = 'Live rate unavailable — using approximate rate';
+    }
+  }
+  function updateRateDisplay(date) {
+    var rl = document.getElementById('cRateLabel');
+    if(rl) rl.textContent = '₱1 = $' + phpRate.toFixed(6) + (date?' · updated '+date:'');
+    var ci = document.getElementById('cConvInfo');
+    if(ci) ci.textContent = 'Source: ExchangeRate-API';
+  }
+  window._convFromPhp = function() {
+    if(!phpRate) return;
+    var v = parseFloat(document.getElementById('cPhp').value)||0;
+    var u = document.getElementById('cUsd');
+    if(u) u.value = v > 0 ? (v*phpRate).toFixed(2) : '';
+  };
+  window._convFromUsd = function() {
+    if(!phpRate) return;
+    var v = parseFloat(document.getElementById('cUsd').value)||0;
+    var ph = document.getElementById('cPhp');
+    if(ph) ph.value = v > 0 ? (v/phpRate).toFixed(2) : '';
+  };
+
+  // Hover effect on bubble
+  var bub = document.getElementById('calcBubble');
+  if(bub) {
+    bub.onmouseover = function(){ if(document.getElementById('calcPanel').style.display==='none') this.style.background='rgba(255,255,255,0.9)'; };
+    bub.onmouseout  = function(){ if(document.getElementById('calcPanel').style.display==='none') this.style.background='rgba(255,255,255,0.72)'; };
+  }
+})();
 </script>
 </body>
 </html>
