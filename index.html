@@ -2939,20 +2939,50 @@ async function submitBudgetPw() {
     input.focus();
   }
 }
+// track selected budget month globally
+let budgetMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+
 function renderBudget(c) {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
   if(!DB.budgetSavings) DB.budgetSavings=[];
-  const totalIncome   = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-  const totalRecurr   = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
-  const totalVar      = DB.budgetVarExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const totalSaved    = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  const totalOut      = totalRecurr + totalVar;
-  const remaining     = totalIncome - totalOut;
-  const remainingColor= remaining >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Build month options: current month ± 12
+  const now = new Date();
+  const monthOptions = [];
+  for(let i = -6; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const val = d.toISOString().slice(0,7);
+    const label = d.toLocaleString('default',{month:'long',year:'numeric'});
+    monthOptions.push({val, label});
+  }
+  // ensure budgetMonth is in the list
+  if(!monthOptions.find(m=>m.val===budgetMonth)) budgetMonth = now.toISOString().slice(0,7);
+
+  const totalIncome = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  // Recurring always counts (monthly fixed bills)
+  const totalRecurr = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+  // Variable expenses filtered to selected month
+  const varForMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth);
+  const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const totalSaved  = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  const totalOut    = totalRecurr + totalVar;
+  const remaining   = totalIncome - totalOut;
+  const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const selectedLabel = monthOptions.find(m=>m.val===budgetMonth)?.label || budgetMonth;
 
   c.innerHTML=`
   ${pageStack.length?backBtn('Back'):''}
+
+  <!-- MONTH SELECTOR -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+    <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-mid)">Viewing</div>
+    <select class="form-select" id="budgetMonthPicker" style="width:200px;font-size:.82rem;font-weight:500" onchange="budgetMonth=this.value;renderBudget(document.getElementById('content'))">
+      ${monthOptions.map(m=>`<option value="${m.val}"${m.val===budgetMonth?' selected':''}>${m.label}</option>`).join('')}
+    </select>
+    ${budgetMonth !== now.toISOString().slice(0,7) ? `<button class="btn btn-ghost btn-sm" onclick="budgetMonth='${now.toISOString().slice(0,7)}';renderBudget(document.getElementById('content'))">Back to current month</button>` : ''}
+  </div>
 
   <!-- SUMMARY CARDS -->
   <div class="grid-3" style="margin-bottom:20px">
@@ -2967,9 +2997,9 @@ function renderBudget(c) {
       <div class="stat-sub">${DB.budgetBills.length} fixed bill${DB.budgetBills.length!==1?'s':''}</div>
     </div>
     <div class="card card-sm">
-      <div class="stat-label">Variable</div>
+      <div class="stat-label">Variable · ${selectedLabel}</div>
       <div class="stat-val" style="font-size:1.5rem;color:var(--purple)">₱${fmt(totalVar)}</div>
-      <div class="stat-sub">${DB.budgetVarExp.length} entr${DB.budgetVarExp.length!==1?'ies':'y'} this month</div>
+      <div class="stat-sub">${varForMonth.length} entr${varForMonth.length!==1?'ies':'y'} in ${selectedLabel}</div>
     </div>
   </div>
 
@@ -3250,11 +3280,15 @@ function fillVarExpList() {
   const el = document.getElementById('varExpList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const filterVal = document.getElementById('varFilter')?.value||'';
-  let sorted = [...DB.budgetVarExp].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // Filter to selected month first
+  let sorted = [...DB.budgetVarExp]
+    .filter(e=>(e.date||'').slice(0,7)===budgetMonth)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(filterVal==='paid')   sorted = sorted.filter(e=>e.paid);
   if(filterVal==='unpaid') sorted = sorted.filter(e=>!e.paid);
   if(!sorted.length) {
-    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">${DB.budgetVarExp.length?'No items match the filter.':'No variable expenses yet.<br>Record dining out, shared bills, one-off purchases...'}</p></div>`;
+    const allInMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth).length;
+    el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">${allInMonth&&filterVal?'No items match the filter.':'No variable expenses for this month yet.'}</p></div>`;
     return;
   }
   const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
