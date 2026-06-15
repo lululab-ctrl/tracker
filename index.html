@@ -571,6 +571,7 @@ function migrateDB(db) {
     workoutLogs:[],goals:[],nutrition:[],calEvents:[],budgetIncome:[],budgetLoans:[],budgetBills:[],budgetVarExp:[],budgetSavings:[]
   };
   Object.keys(defaults).forEach(k=>{ if(!Array.isArray(db[k])) db[k]=defaults[k]; });
+  if(!db.budgetCarryover) db.budgetCarryover = {};
   // Sync paid/paidBy from bookings to their linked expenses
   if(db.bookings && db.expenses) {
     db.bookings.forEach(b=>{
@@ -581,14 +582,29 @@ function migrateDB(db) {
     });
   }
   // Auto-reset recurring bills to Unpaid on the 1st of each new month
+  // and store the carryover balance before resetting
   if(db.budgetBills && Array.isArray(db.budgetBills)) {
     const now = new Date();
     const curYM = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
     const lastReset = db._lastRecurReset;
-    if(lastReset !== curYM) {
+    if(lastReset && lastReset !== curYM) {
+      // Compute net of the month that just ended (lastReset month)
+      const inc = (db.budgetIncome||[]).reduce((s,i)=>s+parseFloat(i.amount||0),0);
+      const rec = db.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+      const varExp = (db.budgetVarExp||[]).filter(e=>(e.date||'').slice(0,7)===lastReset)
+                       .reduce((s,e)=>s+parseFloat(e.amount||0),0);
+      const prevCarry = (db.budgetCarryover||{})[lastReset] || 0;
+      const netLast = inc + prevCarry - rec - varExp;
+      // Store as carryover for current month
+      if(!db.budgetCarryover) db.budgetCarryover = {};
+      db.budgetCarryover[curYM] = netLast;
+      // Reset recurring bills
       db.budgetBills.forEach(b=>{ b.paid = false; });
-      db._lastRecurReset = curYM;
+    } else if(!lastReset) {
+      // First time — just reset without computing carryover
+      db.budgetBills.forEach(b=>{ b.paid = false; });
     }
+    db._lastRecurReset = curYM;
   }
   return db;
 }
@@ -2979,10 +2995,39 @@ function renderBudget(c) {
   const varForMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth);
   const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
   const totalSaved  = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+
+  // ── Carryover: compute net balance of the PREVIOUS month ──
+  function prevYM(ym) {
+    const [y,m] = ym.split('-').map(Number);
+    return m===1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+  }
+  function netForMonth(ym) {
+    // income is always the same each month
+    const inc = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+    const rec = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
+    const varExp = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===ym)
+                     .reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    return inc - rec - varExp;
+  }
+  // Look up stored carryover for selected month, or compute from previous month
+  if(!DB.budgetCarryover) DB.budgetCarryover = {};
+  // carryover into the selected month = net of previous month + carryover that previous month had
+  function getCarryover(ym) {
+    if(!DB.budgetCarryover) return 0;
+    // if we have a stored carryover for this month, use it
+    if(DB.budgetCarryover[ym] !== undefined) return DB.budgetCarryover[ym];
+    // otherwise compute recursively (up to 12 months back)
+    const prev = prevYM(ym);
+    const prevCarry = getCarryover(prev);
+    return prevCarry + netForMonth(prev);
+  }
+  const carryover = getCarryover(budgetMonth);
+
   const totalOut    = totalRecurr + totalVar;
-  const remaining   = totalIncome - totalOut;
+  const remaining   = totalIncome + carryover - totalOut;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtSigned = n => (n>=0?'+':'')+'₱'+Math.abs(n).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   const selectedLabel = monthOptions.find(m=>m.val===budgetMonth)?.label || budgetMonth;
   const nowYM2 = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
@@ -3025,8 +3070,8 @@ function renderBudget(c) {
         <div style="font-family:var(--font-display);font-size:1.2rem;color:var(--text)">🏦 Money in Bank</div>
         <div style="font-size:.72rem;color:var(--text-light);margin-top:2px">Running balance based on all entries</div>
       </div>
-      <div style="font-family:var(--font-display);font-size:2rem;color:${remaining+totalSaved>=0?'var(--green)':'var(--red)'}">
-        ₱${(remaining+totalSaved).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
+      <div style="font-family:var(--font-display);font-size:2rem;color:${remaining>=0?'var(--green)':'var(--red)'}">
+        ₱${Math.abs(remaining).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}${remaining<0?' (deficit)':''}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -3035,11 +3080,16 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Monthly Income</span><span style="font-weight:600">₱${fmt(totalIncome)}</span>
         </div>
+        ${carryover!==0?`
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span style="color:${carryover>=0?'var(--green)':'var(--red)'}">Carried over from previous month</span>
+          <span style="font-weight:600;color:${carryover>=0?'var(--green)':'var(--red)'}">${fmtSigned(carryover)}</span>
+        </div>`:''}
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Savings Added</span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
         </div>
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--green)">
-          <span>Total In</span><span>₱${fmt(totalIncome+totalSaved)}</span>
+          <span>Total In</span><span>₱${fmt(totalIncome+totalSaved+(carryover>0?carryover:0))}</span>
         </div>
       </div>
       <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 14px">
@@ -3056,7 +3106,7 @@ function renderBudget(c) {
       </div>
     </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance (Income − Expenses)</span>
+      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance this month (Income + Carryover − Expenses)</span>
       <span style="font-family:var(--font-display);font-size:1.1rem;color:${remaining>=0?'var(--green)':'var(--red)'};font-weight:600">
         ${remaining>=0?'+':''}₱${remaining.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
       </span>
@@ -3084,7 +3134,7 @@ function renderBudget(c) {
   </div>
 
   <!-- TOP ROW: Income + Savings -->
-  <div class="grid-2" style="align-items:start;margin-bottom:22px">
+  <div class="grid-2" style="align-items:stretch;margin-bottom:22px">
     <div>
       <div class="sec-head"><div class="sec-title">💰 Income</div><button class="btn btn-primary btn-sm" onclick="openIncomeModal()">+ Add</button></div>
       <div id="incomeList"></div>
@@ -3152,12 +3202,15 @@ function fillIncomeList() {
     return;
   }
   const total = DB.budgetIncome.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+  const incomeItems = DB.budgetIncome;
+  const incomeVisible = incomeItems.slice(0,3);
+  const incomeHidden  = incomeItems.slice(3);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${DB.budgetIncome.length} entr${DB.budgetIncome.length!==1?'ies':'y'}</span>
+      <span>${incomeItems.length} entr${incomeItems.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--green)">Total: ₱${fmt(total)}/mo</span>
-    </div>` +
-  DB.budgetIncome.map(i=>{
+    </div>`;
+  function renderIncomeCard(i) {
     const schedLabel = {monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
     let schedDetail = '';
     if(i.paySchedule==='split') {
@@ -3186,7 +3239,26 @@ function fillIncomeList() {
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
     </div>`;
-  }).join('');
+  }
+  incomeVisible.forEach(i=>{ el.innerHTML += renderIncomeCard(i); });
+  if(incomeHidden.length) {
+    const hiddenDiv = document.createElement('div');
+    hiddenDiv.id = 'incomeExtra';
+    hiddenDiv.style.display = 'none';
+    incomeHidden.forEach(i=>{ hiddenDiv.innerHTML += renderIncomeCard(i); });
+    el.appendChild(hiddenDiv);
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'btn btn-ghost btn-sm';
+    toggleBtn.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
+    toggleBtn.textContent = `Show ${incomeHidden.length} more`;
+    toggleBtn.onclick = function(){
+      const d = document.getElementById('incomeExtra');
+      const shown = d.style.display!=='none';
+      d.style.display = shown?'none':'block';
+      this.textContent = shown?`Show ${incomeHidden.length} more`:'Show less';
+    };
+    el.appendChild(toggleBtn);
+  }
 }
 
 function fillSavingsList() {
@@ -3199,12 +3271,14 @@ function fillSavingsList() {
   }
   const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  const savVisible = sorted.slice(0,3);
+  const savHidden  = sorted.slice(3);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--green)">Total saved: ₱${fmt(total)}</span>
-    </div>` +
-  sorted.map(g=>`
+    </div>`;
+  function savCard(g){ return `
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--green)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
@@ -3217,7 +3291,20 @@ function fillSavingsList() {
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`).join('');
+    </div>`; }
+  savVisible.forEach(g=>{ el.innerHTML += savCard(g); });
+  if(savHidden.length) {
+    const hd = document.createElement('div');
+    hd.id = 'savingsExtra'; hd.style.display = 'none';
+    savHidden.forEach(g=>{ hd.innerHTML += savCard(g); });
+    el.appendChild(hd);
+    const tb = document.createElement('button');
+    tb.className = 'btn btn-ghost btn-sm';
+    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
+    tb.textContent = `Show ${savHidden.length} more`;
+    tb.onclick = function(){ const d=document.getElementById('savingsExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${savHidden.length} more`:'Show less'; };
+    el.appendChild(tb);
+  }
 }
 
 function openSavingsModal(id) {
@@ -3307,12 +3394,14 @@ function fillVarExpList() {
     return;
   }
   const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const varVisible = sorted.slice(0,3);
+  const varHidden  = sorted.slice(3);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--purple)">Total: ₱${fmt(total)}</span>
-    </div>` +
-  sorted.map(e=>`
+    </div>`;
+  function varCard(e){ return `
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--purple)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
@@ -3337,7 +3426,24 @@ function fillVarExpList() {
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openVarExpModal('${e.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`).join('');
+    </div>`; }
+  varVisible.forEach(e=>{ el.innerHTML += varCard(e); });
+  if(varHidden.length) {
+    const hd = document.createElement('div');
+    hd.id = 'varExpExtra'; hd.style.display = 'none';
+    varHidden.forEach(e=>{ hd.innerHTML += varCard(e); });
+    el.appendChild(hd);
+    const tb = document.createElement('button');
+    tb.className = 'btn btn-ghost btn-sm';
+    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
+    tb.textContent = `Show ${varHidden.length} more`;
+    tb.onclick = function(){ const d=document.getElementById('varExpExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${varHidden.length} more`:'Show less'; };
+    el.appendChild(tb);
+  }
+}
+  const d = new Date(dateStr+'T12:00:00');
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
 }
 
 function addDays(dateStr, days) {
