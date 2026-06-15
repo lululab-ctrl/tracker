@@ -2031,7 +2031,7 @@ function openExpenseModal(destId, id) {
     <div class="fr2">
       <div class="form-group"><label class="form-label">Category</label>
         <select class="form-select" id="f_ec">
-          ${['Flights','Accommodation','Food','Transport','Activities','Shopping','Other'].map(x=>`<option${e.category===x?' selected':''}>${x}</option>`).join('')}
+          ${['Food','Transport','Activities','Shopping','Other'].map(x=>`<option${e.category===x?' selected':''}>${x}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Date</label>
@@ -2708,28 +2708,47 @@ function renderBudget(c) {
 
 function fillIncomeList() {
   const el = document.getElementById('incomeList'); if(!el) return;
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   if(!DB.budgetIncome.length) {
     el.innerHTML=`<div class="empty" style="padding:28px 16px"><div class="empty-icon" style="font-size:1.8rem">💰</div><p>No income added yet.</p></div>`;
     return;
   }
-  el.innerHTML = DB.budgetIncome.map(i=>`
+  el.innerHTML = DB.budgetIncome.map(i=>{
+    const schedLabel = {monthly:'Monthly',split:'Split paydays',biweekly:'Every 2 weeks',weekly:'Weekly'}[i.paySchedule||'monthly'];
+    let schedDetail = '';
+    if(i.paySchedule==='split') {
+      schedDetail = `
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:110px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px">
+            <div style="font-size:.62rem;color:var(--text-light);margin-bottom:2px">Day ${i.day1||15}</div>
+            <div style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt1)}</div>
+          </div>
+          <div style="flex:1;min-width:110px;background:var(--surface2);border-radius:var(--radius-sm);padding:7px 10px">
+            <div style="font-size:.62rem;color:var(--text-light);margin-bottom:2px">Day ${i.day2||30}</div>
+            <div style="font-size:.86rem;font-weight:600;color:var(--green)">₱${fmt(i.amt2)}</div>
+          </div>
+        </div>`;
+    }
+    return `
     <div class="card card-sm" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${i.label}</div>
-          <div style="font-size:.7rem;color:var(--text-light)">${i.type||'Income'}</div>
+          <div style="font-size:.68rem;color:var(--text-light)">${i.type||'Income'} · ${schedLabel}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">$${parseFloat(i.amount).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-          <div style="font-size:.65rem;color:var(--text-light)">/month</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--green)">₱${fmt(i.amount)}</div>
+          <div style="font-size:.62rem;color:var(--text-light)">/month total</div>
         </div>
       </div>
+      ${schedDetail}
       ${i.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${i.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openIncomeModal('${i.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetIncome','${i.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function fillSavingsList() {
@@ -2880,30 +2899,122 @@ function addDays(dateStr, days) {
 
 function openIncomeModal(id) {
   const item = id ? DB.budgetIncome.find(x=>x.id===id)||{} : {};
+  const isSplit = item.paySchedule === 'split' || (!id); // default new entries to split
+  const schedule = item.paySchedule || 'split';
+
   openModal(id?'Edit Income':'Add Income Source', `
     <div class="form-group"><label class="form-label">Label</label>
       <input class="form-input" id="f_ilabel" placeholder="e.g. Salary, Freelance, Business" value="${item.label||''}">
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Monthly Amount ($)</label>
-        <input class="form-input" id="f_iamt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
-      </div>
       <div class="form-group"><label class="form-label">Type</label>
         <select class="form-select" id="f_itype">
           ${['Salary','Freelance','Business','Investment','Rental','Other'].map(t=>`<option${item.type===t?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>
+      <div class="form-group"><label class="form-label">Payment Schedule</label>
+        <select class="form-select" id="f_ischedule" onchange="updateIncomeFields(this.value)">
+          <option value="monthly" ${schedule==='monthly'?'selected':''}>Once a month</option>
+          <option value="split" ${schedule==='split'||!id?'selected':''}>Split (e.g. 15th & 30th)</option>
+          <option value="biweekly" ${schedule==='biweekly'?'selected':''}>Every 2 weeks</option>
+          <option value="weekly" ${schedule==='weekly'?'selected':''}>Weekly</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label>
+
+    <!-- MONTHLY: single amount -->
+    <div id="inc_monthly" style="display:${schedule==='monthly'?'block':'none'}">
+      <div class="form-group"><label class="form-label">Monthly Amount (₱)</label>
+        <input class="form-input" id="f_iamt" type="number" step="0.01" placeholder="0.00" value="${schedule==='monthly'?(item.amount||''):''}">
+      </div>
+    </div>
+
+    <!-- SPLIT: two paydays -->
+    <div id="inc_split" style="display:${schedule==='split'||!id?'block':'none'}">
+      <div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px">Enter the amount you receive on each payday.</div>
+      <div class="fr2">
+        <div class="form-group">
+          <label class="form-label">1st Payday — Day of Month</label>
+          <input class="form-input" id="f_iday1" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.day1||'15'}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (₱)</label>
+          <input class="form-input" id="f_iamt1" type="number" step="0.01" placeholder="0.00" value="${item.amt1||''}">
+        </div>
+      </div>
+      <div class="fr2">
+        <div class="form-group">
+          <label class="form-label">2nd Payday — Day of Month</label>
+          <input class="form-input" id="f_iday2" type="number" min="1" max="31" placeholder="e.g. 30" value="${item.day2||'30'}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (₱)</label>
+          <input class="form-input" id="f_iamt2" type="number" step="0.01" placeholder="0.00" value="${item.amt2||''}">
+        </div>
+      </div>
+      <div id="split_total" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:.78rem;color:var(--text-mid);display:flex;justify-content:space-between">
+        <span>Monthly total</span>
+        <span style="font-family:var(--font-display);color:var(--green);font-size:1rem">₱${((parseFloat(item.amt1)||0)+(parseFloat(item.amt2)||0)).toLocaleString('en',{minimumFractionDigits:2})}</span>
+      </div>
+    </div>
+
+    <!-- BIWEEKLY / WEEKLY -->
+    <div id="inc_period" style="display:${(schedule==='biweekly'||schedule==='weekly')?'block':'none'}">
+      <div class="form-group"><label class="form-label">Amount per ${schedule==='weekly'?'week':'2 weeks'} (₱)</label>
+        <input class="form-input" id="f_iamtp" type="number" step="0.01" placeholder="0.00" value="${(schedule==='biweekly'||schedule==='weekly')?(item.amtPer||''):''}">
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:4px"><label class="form-label">Notes</label>
       <textarea class="form-textarea" id="f_inotes" rows="2" placeholder="Optional notes...">${item.notes||''}</textarea>
     </div>
   `, () => {
-    const obj = {id:id||uid(), label:fv('f_ilabel'), amount:fv('f_iamt'), type:fv('f_itype'), notes:fv('f_inotes')};
+    const schedule = fv('f_ischedule');
+    let amount, amt1, amt2, day1, day2, amtPer;
+    if(schedule === 'split') {
+      amt1 = parseFloat(fv('f_iamt1'))||0;
+      amt2 = parseFloat(fv('f_iamt2'))||0;
+      day1 = fv('f_iday1')||'15';
+      day2 = fv('f_iday2')||'30';
+      amount = amt1 + amt2;
+    } else if(schedule === 'biweekly') {
+      amtPer = parseFloat(fv('f_iamtp'))||0;
+      amount = amtPer * 2.167; // avg months per year / 26 paydays
+    } else if(schedule === 'weekly') {
+      amtPer = parseFloat(fv('f_iamtp'))||0;
+      amount = amtPer * 4.333;
+    } else {
+      amount = parseFloat(fv('f_iamt'))||0;
+    }
+    const obj = {
+      id:id||uid(), label:fv('f_ilabel'), type:fv('f_itype'),
+      paySchedule:schedule, amount:amount.toFixed(2),
+      amt1, amt2, day1, day2, amtPer,
+      notes:fv('f_inotes')
+    };
     if(id) { const i=DB.budgetIncome.findIndex(x=>x.id===id); DB.budgetIncome[i]=obj; }
     else DB.budgetIncome.push(obj);
     save(); closeModal(); renderBudget(document.getElementById('content'));
   });
 }
+
+function updateIncomeFields(schedule) {
+  document.getElementById('inc_monthly').style.display = schedule==='monthly'?'block':'none';
+  document.getElementById('inc_split').style.display   = schedule==='split'?'block':'none';
+  document.getElementById('inc_period').style.display  = (schedule==='biweekly'||schedule==='weekly')?'block':'none';
+  const lbl = document.querySelector('#inc_period .form-label');
+  if(lbl) lbl.textContent = `Amount per ${schedule==='weekly'?'week':'2 weeks'} (₱)`;
+}
+
+// live split total
+document.addEventListener('input', e => {
+  if(e.target.id==='f_iamt1'||e.target.id==='f_iamt2') {
+    const a1 = parseFloat(document.getElementById('f_iamt1')?.value||0);
+    const a2 = parseFloat(document.getElementById('f_iamt2')?.value||0);
+    const tot = document.getElementById('split_total');
+    if(tot) tot.querySelector('span:last-child').textContent = '₱'+(a1+a2).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+});
 
 function openLoanModal(id) {
   const item = id ? DB.budgetLoans.find(x=>x.id===id)||{} : {};
