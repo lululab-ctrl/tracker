@@ -764,6 +764,8 @@ function go(page, navEl, pushStack=true) {
   // Hide + Add button on detail pages where it's not needed
   const addBtn = document.getElementById('addBtn');
   if(addBtn) addBtn.style.display = ['destination_detail','program_detail','dashboard','budget'].includes(page) ? 'none' : '';
+  const searchWrap = document.querySelector('.search-wrap');
+  if(searchWrap) searchWrap.style.display = page === 'budget' ? 'none' : '';
 
   updateBadges();
   render(page);
@@ -1762,32 +1764,90 @@ function fillDestBudget(exps, destId, payerFilter, paidFilter) {
 
 function fillDestPacking(packs, destId) {
   const el=document.getElementById('packContent'); if(!el) return;
-  if(!packs.length){ el.innerHTML=`<div class="empty"><div class="empty-icon">◻</div><p>No packing lists yet.</p></div>`; return; }
+  if(!packs.length){
+    el.innerHTML=`
+      <div class="empty"><div class="empty-icon">◻</div><p>No packing lists yet.</p></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="openPackingModal('${destId}')">+ Custom List</button>
+        <button class="btn btn-ghost" onclick="openSmartPackModal('${destId}')">✦ Smart Pack (Categorized)</button>
+      </div>`;
+    return;
+  }
+
   el.innerHTML='';
+  // Header with both add options
+  const hdr = document.createElement('div');
+  hdr.style.cssText='display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap';
+  hdr.innerHTML=`
+    <button class="btn btn-primary btn-sm" onclick="openPackingModal('${destId}')">+ Custom List</button>
+    <button class="btn btn-ghost btn-sm" onclick="openSmartPackModal('${destId}')">✦ Smart Pack</button>`;
+  el.appendChild(hdr);
+
   const grid=document.createElement('div'); grid.className='grid-2'; el.appendChild(grid);
+
   packs.forEach(pl=>{
-    const packed=pl.items.filter(i=>i.packed).length;
-    const pct=pl.items.length?Math.round(packed/pl.items.length*100):0;
+    const allItems = pl.items||[];
+    const packed = allItems.filter(i=>i.packed).length;
+    const pct = allItems.length ? Math.round(packed/allItems.length*100) : 0;
     const card=document.createElement('div'); card.className='card'; card.style.marginBottom='0';
+
+    // Group items by category
+    const categories = {};
+    allItems.forEach((item,idx)=>{
+      const cat = item.category||'General';
+      if(!categories[cat]) categories[cat]=[];
+      categories[cat].push({...item,_idx:idx});
+    });
+
+    const catEmoji = {
+      'Clothing':'👗','Toiletries':'🪥','Gadgets':'📱','Documents':'📄',
+      'Medicines':'💊','Shoes':'👟','Accessories':'👜','Snacks':'🍬',
+      'General':'📦','Other':'◈'
+    };
+
+    const catHtml = Object.entries(categories).map(([cat,items])=>`
+      <div style="margin-bottom:12px">
+        <div style="font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+          <span>${catEmoji[cat]||'◈'}</span>${cat}
+          <span style="font-size:.6rem;color:var(--text-light);font-weight:400">(${items.filter(i=>i.packed).length}/${items.length})</span>
+        </div>
+        ${items.map(item=>`
+          <div class="pack-item" style="padding:7px 0">
+            <input type="checkbox" ${item.packed?'checked':''} onchange="togglePack('${pl.id}',${item._idx},this.checked)" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0">
+            <span class="pack-item-name${item.packed?' done':''}" style="flex:1">
+              ${item.name}${item.qty&&item.qty>1?`<span style="font-size:.68rem;color:var(--accent);margin-left:4px;font-weight:600">×${item.qty}</span>`:''}
+            </span>
+            <button onclick="removePackItem('${pl.id}',${item._idx},'${destId}')" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:.7rem;padding:2px 4px;opacity:0" class="pack-del-btn">✕</button>
+          </div>`).join('')}
+      </div>`).join('');
+
     card.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-family:var(--font-display);font-size:1.1rem">${pl.name}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-family:var(--font-display);font-size:1.05rem">${pl.name}</div>
         <div style="display:flex;gap:6px;align-items:center">
-          <span class="badge b-gray">${packed}/${pl.items.length}</span>
+          <span class="badge ${pct===100?'b-green':'b-gray'}">${packed}/${allItems.length}</span>
           <button class="btn btn-danger btn-sm" onclick="delItem('packingLists','${pl.id}',()=>openDest('${destId}',currentDestTab))">✕</button>
         </div>
       </div>
-      <div class="prog-bar" style="margin-bottom:12px"><div class="prog-fill" style="width:${pct}%"></div></div>
-      <div style="max-height:200px;overflow-y:auto;margin-bottom:10px">
-        ${pl.items.map((item,idx)=>`<div class="pack-item">
-          <input type="checkbox" ${item.packed?'checked':''} onchange="togglePack('${pl.id}',${idx},this.checked)">
-          <span class="pack-item-name${item.packed?' done':''}">${item.name}</span>
-        </div>`).join('')}
-      </div>
-      <div style="display:flex;gap:6px">
-        <input class="form-input" id="pi_${pl.id}" placeholder="Add item..." style="flex:1;padding:6px 10px;font-size:.75rem" onkeydown="if(event.key==='Enter')addPackItem('${pl.id}','${destId}')">
+      <div class="prog-bar" style="margin-bottom:14px"><div class="prog-fill" style="width:${pct}%;${pct===100?'background:var(--green)':''}"></div></div>
+      <div style="max-height:340px;overflow-y:auto;margin-bottom:10px">${catHtml}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        <input class="form-input" id="pi_${pl.id}" placeholder="Add item..." style="flex:1;min-width:100px;padding:6px 10px;font-size:.75rem" onkeydown="if(event.key==='Enter')addPackItem('${pl.id}','${destId}')">
+        <select class="form-select" id="pc_${pl.id}" style="width:110px;font-size:.72rem">
+          ${['General','Clothing','Toiletries','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(c=>`<option>${c}</option>`).join('')}
+        </select>
+        <input class="form-input" id="pq_${pl.id}" type="number" min="1" placeholder="Qty" style="width:56px;padding:6px 8px;font-size:.75rem" value="1">
         <button class="btn btn-primary btn-sm" onclick="addPackItem('${pl.id}','${destId}')">Add</button>
       </div>`;
+
+    // hover show delete btn
+    card.querySelectorAll && setTimeout(()=>{
+      card.querySelectorAll('.pack-del-btn').forEach(btn=>{
+        btn.parentElement.addEventListener('mouseenter',()=>btn.style.opacity='1');
+        btn.parentElement.addEventListener('mouseleave',()=>btn.style.opacity='0');
+      });
+    },0);
+
     grid.appendChild(card);
   });
 }
@@ -2139,15 +2199,75 @@ function calcExpSplit() {
 
 function openPackingModal(destId) {
   openModal('New Packing List',`
-    <div class="form-group"><label class="form-label">List Name</label><input class="form-input" id="f_pn" placeholder="e.g. Malaysia Essentials"></div>
+    <div class="form-group"><label class="form-label">List Name</label>
+      <input class="form-input" id="f_pn" placeholder="e.g. Malaysia Essentials">
+    </div>
     <div class="form-group"><label class="form-label">Items (one per line)</label>
-      <textarea class="form-textarea" id="f_pi" rows="6" placeholder="Passport&#10;Travel adapter&#10;Medications&#10;Camera&#10;Sunscreen"></textarea>
+      <textarea class="form-textarea" id="f_pi" rows="5" placeholder="Passport&#10;Travel adapter&#10;Medications&#10;Camera&#10;Sunscreen"></textarea>
+    </div>
+    <div class="form-group"><label class="form-label">Default Category for these items</label>
+      <select class="form-select" id="f_pcat">
+        ${['General','Clothing','Toiletries','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(c=>`<option>${c}</option>`).join('')}
+      </select>
     </div>
   `,()=>{
-    const items=fv('f_pi').split('\n').filter(Boolean).map(n=>({name:n.trim(),packed:false}));
+    const cat = fv('f_pcat')||'General';
+    const items=fv('f_pi').split('\n').filter(Boolean).map(n=>({name:n.trim(),packed:false,category:cat,qty:1}));
     DB.packingLists.push({id:uid(),destId,name:fv('f_pn'),items});
     save(); closeModal(); openDest(destId, currentDestTab);
   });
+}
+
+function openSmartPackModal(destId) {
+  const templates = {
+    'Clothing':['T-shirts','Pants/Jeans','Shorts','Dress/Outfit','Underwear','Socks','Sleepwear','Swimwear'],
+    'Toiletries':['Toothbrush','Toothpaste','Shampoo','Conditioner','Body wash','Deodorant','Moisturizer','Sunscreen','Face wash','Razor'],
+    'Gadgets':['Phone charger','Power bank','Earphones/AirPods','Camera','Laptop','Travel adapter','USB cable'],
+    'Documents':['Passport','Printed tickets','Hotel confirmation','Travel insurance','Visa','ID card'],
+    'Medicines':['Paracetamol','Motion sickness pills','Band-aids','Antacid','Vitamin C'],
+    'Accessories':['Sunglasses','Watch','Belt','Bag/Tote','Umbrella'],
+    'Snacks':['Snack bars','Instant noodles','Nuts/chips','Water bottle'],
+  };
+
+  openModal('✦ Smart Pack — Categorized', `
+    <p style="font-size:.76rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Enter how many you need. Leave 0 to skip.</p>
+    <div class="form-group"><label class="form-label">List Name</label>
+      <input class="form-input" id="f_spn" placeholder="e.g. Malaysia Trip" value="">
+    </div>
+    ${Object.entries(templates).map(([cat,items])=>`
+      <div style="margin-bottom:16px">
+        <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">${cat}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${items.map(item=>`
+            <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--radius-sm);padding:6px 10px">
+              <span style="flex:1;font-size:.78rem;color:var(--text)">${item}</span>
+              <input type="number" min="0" value="0" style="width:44px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:.75rem;text-align:center;background:var(--surface)" data-item="${item}" data-cat="${cat}">
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
+    <div style="margin-bottom:14px">
+      <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mid);font-weight:600;margin-bottom:8px">Extra Items</div>
+      <textarea class="form-textarea" id="f_spextra" rows="2" placeholder="Other item, qty | Another item, qty"></textarea>
+    </div>
+  `, () => {
+    const listName = fv('f_spn') || 'Packing List';
+    const items = [];
+    document.querySelectorAll('[data-item][data-cat]').forEach(inp=>{
+      const qty = parseInt(inp.value)||0;
+      if(qty > 0) items.push({name:inp.dataset.item, qty, category:inp.dataset.cat, packed:false});
+    });
+    // Extra items
+    const extras = fv('f_spextra').split('\n').filter(Boolean);
+    extras.forEach(line=>{
+      const parts = line.split(',');
+      const name = parts[0]?.trim();
+      const qty = parseInt(parts[1])||1;
+      if(name) items.push({name, qty, category:'Other', packed:false});
+    });
+    if(!items.length){ alert('Add at least one item.'); return; }
+    DB.packingLists.push({id:uid(), destId, name:listName, items});
+    save(); closeModal(); openDest(destId, currentDestTab);
+  }, true);
 }
 
 function openDocModal(destId) {
@@ -2193,9 +2313,24 @@ function togglePack(listId,idx,val) {
 }
 function addPackItem(listId,destId) {
   const inp=document.getElementById('pi_'+listId);
+  const catEl=document.getElementById('pc_'+listId);
+  const qtyEl=document.getElementById('pq_'+listId);
   if(!inp||!inp.value.trim()) return;
   const pl=DB.packingLists.find(l=>l.id===listId);
-  if(pl){pl.items.push({name:inp.value.trim(),packed:false});save();openDest(destId,currentDestTab);}
+  if(pl){
+    pl.items.push({
+      name:inp.value.trim(),
+      packed:false,
+      category:catEl?catEl.value:'General',
+      qty:parseInt(qtyEl?.value)||1
+    });
+    save();openDest(destId,currentDestTab);
+  }
+}
+
+function removePackItem(listId,idx,destId) {
+  const pl=DB.packingLists.find(l=>l.id===listId);
+  if(pl){pl.items.splice(idx,1);save();openDest(destId,currentDestTab);}
 }
 function delPhoto(memId,pi,destId) {
   const m=DB.memories.find(x=>x.id===memId);
@@ -2613,6 +2748,7 @@ function renderBudgetGate(c) {
         <div class="form-group">
           <label class="form-label">Password</label>
           <input class="form-input" id="budgetPwInput" type="password" placeholder="Enter password"
+            autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
             style="text-align:center;letter-spacing:.1em"
             onkeydown="if(event.key==='Enter') submitBudgetPw()">
         </div>
