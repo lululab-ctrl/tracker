@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Lulu</title>
+
+<!-- PWA: home screen icon & standalone mode -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lulu">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#B85870">
+<link rel="manifest" href="manifest.json">
+
+<!-- Apple touch icons (inline SVG converted to data URI below via JS) -->
+<link rel="apple-touch-icon" id="appleTouchIcon" href="">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Text:ital@0;1&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -47,7 +58,7 @@ html,body{height:100%;overflow:hidden;font-family:var(--font-body);font-weight:4
 .sidebar.collapsed{width:56px;min-width:56px}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .topbar{height:var(--topbar-h);min-height:var(--topbar-h);background:#FDFAF7;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px}
-.content{flex:1;overflow-y:auto;padding:26px 28px;background:var(--bg)}
+.content{flex:1;overflow-y:auto;padding:26px 28px;padding-bottom:calc(26px + env(safe-area-inset-bottom));background:var(--bg)}
 .sb-logo{padding:20px 16px 16px;border-bottom:1px solid var(--sidebar-border);display:flex;align-items:center;gap:11px;cursor:pointer;flex-shrink:0;user-select:none}
 .sb-logo-mark{width:28px;height:28px;background:linear-gradient(135deg,#B85870,#D4907A);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:#fff;font-weight:600;flex-shrink:0;letter-spacing:.04em;box-shadow:0 2px 8px rgba(184,88,112,.22)}
 .sb-logo-text{font-family:var(--font-display);font-size:1.1rem;font-weight:400;color:rgba(255,255,255,.88);white-space:nowrap;transition:opacity .2s;letter-spacing:.02em}
@@ -321,6 +332,81 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield}
   .btn-sm{padding:4px 9px;font-size:.65rem}
 }
 </style>
+
+<script>
+// ── PWA: manifest + service worker — all inline, no extra files needed ──
+(function() {
+  // 1. Create and inject manifest.json as a blob
+  const manifest = {
+    name: "Lulu — Travel & Finance Hub",
+    short_name: "Lulu",
+    description: "Personal travel, fitness & budget tracker",
+    start_url: "/tracker/",
+    scope: "/tracker/",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#F5EEE8",
+    theme_color: "#B85870",
+    icons: [
+      {
+        src: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#F5EEE8"/><g transform="translate(136,60)"><path d="M120 290 Q114 330 110 420" stroke="#5A7830" stroke-width="14" stroke-linecap="round" fill="none"/><path d="M116 340 Q80 318 66 288 Q84 292 112 318Z" fill="#7A9850"/><path d="M118 368 Q156 348 168 318 Q152 324 122 354Z" fill="#6A8840"/><path d="M120 280 Q94 264 84 228 Q102 236 121 268Z" fill="#5A7830" opacity=".85"/><path d="M120 280 Q146 264 156 228 Q138 236 119 268Z" fill="#4A6828" opacity=".85"/><path d="M120 240 Q72 224 56 152 Q72 120 100 138 Q112 186 120 240Z" fill="#D09080" opacity=".86"/><path d="M120 240 Q168 224 184 152 Q168 120 140 138 Q128 186 120 240Z" fill="#D09080" opacity=".86"/><path d="M120 240 Q88 168 92 92 Q112 62 132 92 Q132 170 120 240Z" fill="#E0B8A8" opacity=".83"/><path d="M120 232 Q88 188 84 136 Q100 104 120 138 Q124 186 120 232Z" fill="#C06870" opacity=".92"/><path d="M120 232 Q152 188 156 136 Q140 104 120 138 Q116 186 120 232Z" fill="#C06870" opacity=".92"/><path d="M120 228 Q104 176 108 114 Q116 90 132 114 Q132 174 120 228Z" fill="#B85870" opacity=".9"/><path d="M120 216 Q100 180 104 138 Q116 114 128 144 Q128 186 120 216Z" fill="#B85870" opacity=".96"/><path d="M120 216 Q140 180 136 138 Q124 114 112 144 Q112 186 120 216Z" fill="#B85870" opacity=".96"/><path d="M120 204 Q112 174 114 150 Q120 135 128 150 Q128 180 120 204Z" fill="#B85870" opacity=".98"/><circle cx="120" cy="180" r="28" fill="#F8C870"/><circle cx="120" cy="180" r="18" fill="none" stroke="rgba(160,110,20,.18)" stroke-width="4"/><circle cx="120" cy="163" r="5.6" fill="rgba(130,80,10,.55)"/><circle cx="133" cy="170" r="4.8" fill="rgba(130,80,10,.5)"/><circle cx="136" cy="184" r="5.6" fill="rgba(130,80,10,.5)"/><circle cx="120" cy="197" r="4.8" fill="rgba(130,80,10,.5)"/><circle cx="104" cy="184" r="5.6" fill="rgba(130,80,10,.5)"/><circle cx="107" cy="170" r="4.8" fill="rgba(130,80,10,.55)"/></g></svg>`),
+        sizes: "512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }
+    ]
+  };
+
+  const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  const manifestURL  = URL.createObjectURL(manifestBlob);
+  let link = document.querySelector('link[rel="manifest"]');
+  if(!link){ link = document.createElement('link'); link.rel='manifest'; document.head.appendChild(link); }
+  link.href = manifestURL;
+
+  // 2. Set apple-touch-icon to the same SVG (iOS reads this for home screen icon)
+  const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#F5EEE8"/><g transform="translate(136,60)"><path d="M120 290 Q114 330 110 420" stroke="#5A7830" stroke-width="14" stroke-linecap="round" fill="none"/><path d="M116 340 Q80 318 66 288 Q84 292 112 318Z" fill="#7A9850"/><path d="M118 368 Q156 348 168 318 Q152 324 122 354Z" fill="#6A8840"/><path d="M120 280 Q94 264 84 228 Q102 236 121 268Z" fill="#5A7830" opacity=".85"/><path d="M120 280 Q146 264 156 228 Q138 236 119 268Z" fill="#4A6828" opacity=".85"/><path d="M120 240 Q72 224 56 152 Q72 120 100 138 Q112 186 120 240Z" fill="#D09080" opacity=".86"/><path d="M120 240 Q168 224 184 152 Q168 120 140 138 Q128 186 120 240Z" fill="#D09080" opacity=".86"/><path d="M120 240 Q88 168 92 92 Q112 62 132 92 Q132 170 120 240Z" fill="#E0B8A8" opacity=".83"/><path d="M120 232 Q88 188 84 136 Q100 104 120 138 Q124 186 120 232Z" fill="#C06870" opacity=".92"/><path d="M120 232 Q152 188 156 136 Q140 104 120 138 Q116 186 120 232Z" fill="#C06870" opacity=".92"/><path d="M120 228 Q104 176 108 114 Q116 90 132 114 Q132 174 120 228Z" fill="#B85870" opacity=".9"/><path d="M120 216 Q100 180 104 138 Q116 114 128 144 Q128 186 120 216Z" fill="#B85870" opacity=".96"/><path d="M120 216 Q140 180 136 138 Q124 114 112 144 Q112 186 120 216Z" fill="#B85870" opacity=".96"/><path d="M120 204 Q112 174 114 150 Q120 135 128 150 Q128 180 120 204Z" fill="#B85870" opacity=".98"/><circle cx="120" cy="180" r="28" fill="#F8C870"/><circle cx="120" cy="180" r="18" fill="none" stroke="rgba(160,110,20,.18)" stroke-width="4"/><circle cx="120" cy="163" r="5.6" fill="rgba(130,80,10,.55)"/><circle cx="133" cy="170" r="4.8" fill="rgba(130,80,10,.5)"/><circle cx="136" cy="184" r="5.6" fill="rgba(130,80,10,.5)"/><circle cx="120" cy="197" r="4.8" fill="rgba(130,80,10,.5)"/><circle cx="104" cy="184" r="5.6" fill="rgba(130,80,10,.5)"/><circle cx="107" cy="170" r="4.8" fill="rgba(130,80,10,.55)"/></g></svg>`;
+  const iconBlob = new Blob([svgIcon], {type:'image/svg+xml'});
+  const iconURL  = URL.createObjectURL(iconBlob);
+  const appleIcon = document.getElementById('appleTouchIcon');
+  if(appleIcon) appleIcon.href = iconURL;
+
+  // 3. Register a minimal service worker for offline caching
+  if('serviceWorker' in navigator) {
+    const swCode = `
+const CACHE = 'lulu-v1';
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(['/tracker/']))
+  );
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      return cached || fetch(e.request).then(resp => {
+        if(resp && resp.status === 200 && resp.type === 'basic') {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      }).catch(() => cached);
+    })
+  );
+});
+`;
+    const swBlob = new Blob([swCode], {type:'application/javascript'});
+    const swURL  = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swURL, {scope: '/tracker/'})
+      .catch(()=>{}); // fail silently if scope issues
+  }
+})();
+</script>
 </head>
 <style>
 /* ── SPLASH ── */
