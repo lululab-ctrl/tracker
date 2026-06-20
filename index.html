@@ -643,7 +643,7 @@ let saveTimer = null;
 let isSaving = false;
 
 async function loadFromCloud() {
-  if(!cloudEnabled) return null;
+  if(!cloudEnabled) return {status:'disabled', data:null};
   try {
     const r = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=data`, {
       headers: {
@@ -652,14 +652,22 @@ async function loadFromCloud() {
         'Content-Type': 'application/json'
       }
     });
-    if(!r.ok) return null;
+    if(!r.ok) return {status:'error', data:null}; // network/server error — NOT empty
     const rows = await r.json();
-    return rows && rows[0] ? rows[0].data : null;
-  } catch(e) { return null; }
+    if(rows && rows[0]) return {status:'ok', data: rows[0].data};
+    return {status:'no_row', data:null}; // row genuinely doesn't exist
+  } catch(e) { return {status:'error', data:null}; } // fetch failed — NOT empty
 }
 
-async function saveToCloud(data) {
+async function saveToCloud(data, force) {
   if(!cloudEnabled || isSaving) return;
+  // Safety net: refuse to push a completely empty DB unless explicitly forced
+  // (force=true is only used for the genuine first-ever-run case).
+  const isEffectivelyEmpty = Object.keys(EMPTY_DB).every(k => !Array.isArray(data[k]) || data[k].length === 0);
+  if(isEffectivelyEmpty && !force) {
+    console.warn('Refused to save empty DB to cloud — possible data loss prevented.');
+    return;
+  }
   isSaving = true;
   showSyncStatus('saving');
   try {
@@ -744,19 +752,25 @@ async function initDB() {
     <style>@keyframes loadBar{0%{width:0%;margin-left:0}50%{width:100%;margin-left:0}100%{width:0%;margin-left:100%}}</style>`;
   document.body.appendChild(loader);
 
-  const cloud = await loadFromCloud();
+  const result = await loadFromCloud();
 
   // Remove loader
   loader.remove();
 
-  if(cloud && Object.keys(cloud).length > 0) {
-    DB = migrateDB(cloud);
+  if(result.status === 'ok' && result.data && Object.keys(result.data).length > 0) {
+    // Cloud has real data — use it
+    DB = migrateDB(result.data);
     try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e){}
     showSyncStatus('saved');
-  } else {
-    // No cloud data yet — push local data up
-    await saveToCloud(DB);
+  } else if(result.status === 'no_row') {
+    // The row genuinely doesn't exist yet (first-ever run) — safe to push local data
+    await saveToCloud(DB, true);
+  } else if(result.status === 'error') {
+    // Network/server error — DO NOT touch the cloud. Keep working from local data only.
+    // This prevents accidentally wiping cloud data due to a temporary connectivity issue.
+    showSyncStatus('error');
   }
+  // result.status === 'ok' with empty data object is also treated as safe (no overwrite needed)
 
   ensureBuiltin();
   updateBadges();
@@ -3850,11 +3864,14 @@ function openBudgetQuickAdd() {
       <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openIncomeModal,100)">
         💰 <span style="margin-left:6px">Income Source</span>
       </button>
-      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openLoanModal,100)">
-        🏦 <span style="margin-left:6px">Loan</span>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openSavingsModal,100)">
+        🐷 <span style="margin-left:6px">Savings</span>
       </button>
-      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openBillModal,100)">
-        📋 <span style="margin-left:6px">Bill / Expense</span>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openRecurringModal,100)">
+        🔁 <span style="margin-left:6px">Recurring Expense</span>
+      </button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openVarExpModal,100)">
+        📋 <span style="margin-left:6px">Variable Expense</span>
       </button>
     </div>
   `, null);
