@@ -641,11 +641,13 @@ const SK = 'byherhub_v2_local';
 let cloudEnabled = !!(SUPA_URL && SUPA_KEY);
 let saveTimer = null;
 let isSaving = false;
+let initialLoadComplete = !cloudEnabled; // true immediately if no cloud configured
+let lastKnownCloudTimestamp = null; // tracks the updated_at we last saw, to detect other-device writes
 
 async function loadFromCloud() {
   if(!cloudEnabled) return {status:'disabled', data:null};
   try {
-    const r = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=data`, {
+    const r = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=data,updated_at`, {
       headers: {
         'apikey': SUPA_KEY,
         'Authorization': `Bearer ${SUPA_KEY}`,
@@ -654,7 +656,10 @@ async function loadFromCloud() {
     });
     if(!r.ok) return {status:'error', data:null}; // network/server error — NOT empty
     const rows = await r.json();
-    if(rows && rows[0]) return {status:'ok', data: rows[0].data};
+    if(rows && rows[0]) {
+      lastKnownCloudTimestamp = rows[0].updated_at || null;
+      return {status:'ok', data: rows[0].data};
+    }
     return {status:'no_row', data:null}; // row genuinely doesn't exist
   } catch(e) { return {status:'error', data:null}; } // fetch failed — NOT empty
 }
@@ -671,6 +676,54 @@ async function saveToCloud(data, force) {
   isSaving = true;
   showSyncStatus('saving');
   try {
+    // Conflict check: has the cloud been updated by ANOTHER device since we last loaded it?
+    // If so, pull the latest first and merge our save on top of it rather than blindly
+    // overwriting whatever the other device just wrote.
+    if(lastKnownCloudTimestamp && !force) {
+      const checkR = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=updated_at`, {
+        headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
+      });
+      if(checkR.ok) {
+        const checkRows = await checkR.json();
+        const cloudTs = checkRows && checkRows[0] ? checkRows[0].updated_at : null;
+        if(cloudTs && lastKnownCloudTimestamp && new Date(cloudTs) > new Date(lastKnownCloudTimestamp)) {
+          // Another device wrote more recently than what we have. Pull their version,
+          // merge it underneath our local DB (our local changes win for any field we've
+          // touched, since we don't have per-field change tracking — but at minimum we
+          // no longer silently destroy their newer write without ever seeing it).
+          const freshR = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=data,updated_at`, {
+            headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
+          });
+          if(freshR.ok) {
+            const freshRows = await freshR.json();
+            if(freshRows && freshRows[0]) {
+              const freshData = freshRows[0].data;
+              // Merge: for each array field, union by id so neither device's additions are lost.
+              Object.keys(EMPTY_DB).forEach(key => {
+                if(Array.isArray(freshData[key]) && Array.isArray(data[key])) {
+                  const merged = [...freshData[key]];
+                  const existingIds = new Set(merged.map(item => item && item.id));
+                  data[key].forEach(item => {
+                    if(item && item.id && !existingIds.has(item.id)) {
+                      merged.push(item);
+                      existingIds.add(item.id);
+                    } else if(item && item.id) {
+                      // Same id exists in both — prefer our local version (most recent edit)
+                      const idx = merged.findIndex(m => m && m.id === item.id);
+                      if(idx !== -1) merged[idx] = item;
+                    }
+                  });
+                  data[key] = merged;
+                }
+              });
+              DB = data; // reflect the merge in the live in-memory DB too
+              try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e){}
+            }
+          }
+        }
+      }
+    }
+
     const r = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main`, {
       method: 'PATCH',
       headers: {
@@ -681,7 +734,10 @@ async function saveToCloud(data, force) {
       },
       body: JSON.stringify({ data, updated_at: new Date().toISOString() })
     });
-    if(r.ok) showSyncStatus('saved');
+    if(r.ok) {
+      lastKnownCloudTimestamp = new Date().toISOString();
+      showSyncStatus('saved');
+    }
     else showSyncStatus('error');
   } catch(e) {
     showSyncStatus('error');
@@ -729,6 +785,14 @@ let DB = (() => {
 function save() {
   // Always save locally first (instant, works offline)
   try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e){}
+  // HARD GATE: never push to cloud until the initial cloud load has finished.
+  // This is the single most important guard against cross-device data loss —
+  // without it, a save() triggered before initDB() resolves could push this
+  // device's (possibly stale/empty) local DB and overwrite real cloud data.
+  if(!initialLoadComplete) {
+    console.warn('save() called before initial cloud sync completed — cloud write skipped, local save only.');
+    return;
+  }
   // Debounce cloud save — 1.5s after last change
   if(cloudEnabled) {
     clearTimeout(saveTimer);
@@ -764,6 +828,7 @@ async function initDB() {
     showSyncStatus('saved');
   } else if(result.status === 'no_row') {
     // The row genuinely doesn't exist yet (first-ever run) — safe to push local data
+    initialLoadComplete = true; // must be set before saveToCloud, which is gated by save() elsewhere
     await saveToCloud(DB, true);
   } else if(result.status === 'error') {
     // Network/server error — DO NOT touch the cloud. Keep working from local data only.
@@ -771,6 +836,12 @@ async function initDB() {
     showSyncStatus('error');
   }
   // result.status === 'ok' with empty data object is also treated as safe (no overwrite needed)
+
+  // Mark the initial sync as complete — save() is now allowed to push to the cloud.
+  // This MUST happen after the cloud state above has been resolved one way or another,
+  // never before, or a user interaction during the fetch could trigger a premature
+  // overwrite using stale/empty local data.
+  initialLoadComplete = true;
 
   ensureBuiltin();
   updateBadges();
@@ -4043,6 +4114,32 @@ function restorePage() {
 // Load from cloud then restore — initDB must NOT navigate on its own
 if(cloudEnabled) {
   initDB().then(()=>{ restorePage(); resetIdle(); });
+
+  // Periodic background freshness check (every 30s): if the cloud has been
+  // updated by another device and we have no unsaved local changes pending,
+  // silently refresh our in-memory DB. This keeps long-open sessions from
+  // going stale and reduces the chance of an old session ever overwriting
+  // a newer edit made elsewhere.
+  setInterval(async () => {
+    if(!initialLoadComplete || isSaving || saveTimer) return; // skip if mid-edit or mid-save
+    try {
+      const r = await fetch(`${SUPA_URL}/rest/v1/lulu_data?id=eq.main&select=updated_at`, {
+        headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
+      });
+      if(!r.ok) return;
+      const rows = await r.json();
+      const cloudTs = rows && rows[0] ? rows[0].updated_at : null;
+      if(cloudTs && lastKnownCloudTimestamp && new Date(cloudTs) > new Date(lastKnownCloudTimestamp)) {
+        const result = await loadFromCloud();
+        if(result.status === 'ok' && result.data) {
+          DB = migrateDB(result.data);
+          try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e){}
+          // Re-render whatever page is currently active so the refreshed data shows up
+          if(typeof currentPage !== 'undefined') render(currentPage);
+        }
+      }
+    } catch(e) { /* silent — background check, not user-facing */ }
+  }, 30000);
 } else {
   restorePage();
   resetIdle();
