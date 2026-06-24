@@ -3035,7 +3035,7 @@ function renderBudgetGate(c) {
       <div style="width:100%;max-width:320px">
         <div class="form-group">
           <label class="form-label">Password</label>
-          <input class="form-input" id="budgetPwInput" type="password" placeholder="Enter password"
+          <input class="form-input" id="budgetPwInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="Enter password"
             autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
             style="text-align:center;letter-spacing:.1em"
             onkeydown="if(event.key==='Enter') submitBudgetPw()">
