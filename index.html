@@ -3485,7 +3485,9 @@ function fillSavingsList() {
   const logHtml = thisMonthEntries.length
     ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light)">
         <div style="font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:8px">This Month's Activity</div>
-        ${thisMonthEntries.map(logRow).join('')}
+        <div style="max-height:220px;overflow-y:auto;padding-right:4px">
+          ${thisMonthEntries.map(logRow).join('')}
+        </div>
       </div>`
     : `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light);text-align:center">
         <div style="font-size:.72rem;color:var(--text-light)">No activity yet this month.</div>
