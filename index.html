@@ -3781,9 +3781,14 @@ function fillPaymentInfoList() {
           <button class="btn btn-danger btn-sm" onclick="delItem('paymentInfo','${p.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
         </div>
       </div>
+      ${p.accountName?`
+      <div class="copy-acct-row" data-acct-id="${p.id}" data-copy-field="accountName" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
+        <span style="flex:1;font-size:.82rem;color:var(--text);word-break:break-word">${p.accountName}</span>
+        <span class="copy-acct-hint" style="flex-shrink:0;font-size:.65rem;color:var(--text-light);letter-spacing:.04em">tap to copy</span>
+      </div>`:''}
       ${p.accountNumber?`
-      <div class="copy-acct-row" data-acct-id="${p.id}" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
-        <span class="copy-acct-text" style="flex:1;font-family:var(--font-display);font-size:.95rem;color:var(--text);letter-spacing:.03em;word-break:break-all">${p.accountNumber}</span>
+      <div class="copy-acct-row" data-acct-id="${p.id}" data-copy-field="accountNumber" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
+        <span style="flex:1;font-family:var(--font-display);font-size:.95rem;color:var(--text);letter-spacing:.03em;word-break:break-all">${p.accountNumber}</span>
         <span class="copy-acct-hint" style="flex-shrink:0;font-size:.65rem;color:var(--text-light);letter-spacing:.04em">tap to copy</span>
       </div>`:''}
       ${p.qrImage?`
@@ -3821,6 +3826,9 @@ function openPaymentInfoModal(id) {
     <div class="form-group"><label class="form-label">Bank / Provider <span style="font-size:.65rem;color:var(--text-light);font-weight:400">(optional)</span></label>
       <input class="form-input" id="f_pibank" placeholder="e.g. BDO, GCash, Meralco" value="${item.bank||''}">
     </div>
+    <div class="form-group"><label class="form-label">Account Name</label>
+      <input class="form-input" id="f_piacctname" placeholder="e.g. Juan Dela Cruz" value="${item.accountName||''}">
+    </div>
     <div class="form-group"><label class="form-label">Account Number</label>
       <input class="form-input" id="f_piacct" placeholder="e.g. 1234-5678-9012" value="${item.accountNumber||''}">
     </div>
@@ -3841,6 +3849,7 @@ function openPaymentInfoModal(id) {
       id:id||uid(),
       label:fv('f_pilabel'),
       bank:fv('f_pibank'),
+      accountName:fv('f_piacctname'),
       accountNumber:fv('f_piacct'),
       qrImage,
       notes:fv('f_pinotes')
@@ -3885,17 +3894,18 @@ function copyToClipboard(text, btnEl) {
   }
 }
 
-// Event delegation for tappable account-number rows — avoids ever embedding
-// raw account number text inside an inline onclick attribute string.
+// Event delegation for tappable account-name/account-number rows — avoids ever
+// embedding raw account text inside an inline onclick attribute string.
 document.addEventListener('click', function(e) {
   const row = e.target.closest('.copy-acct-row');
   if(!row) return;
   const id = row.getAttribute('data-acct-id');
+  const field = row.getAttribute('data-copy-field') || 'accountNumber';
   if(!id || !DB.paymentInfo) return;
   const item = DB.paymentInfo.find(x=>x.id===id);
-  if(!item || !item.accountNumber) return;
+  if(!item || !item[field]) return;
   const hint = row.querySelector('.copy-acct-hint');
-  copyToClipboard(item.accountNumber, hint);
+  copyToClipboard(item[field], hint);
 });
 
 function addDays(dateStr, days) {
