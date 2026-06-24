@@ -3165,10 +3165,12 @@ function renderBudget(c) {
   const carryover = computeCarryover(budgetMonth);
 
   const totalOut    = totalRecurr + totalVar + totalReceivablesOut;
-  // Withdrawals from Savings are intentionally excluded from Net Balance —
-  // per design, a withdrawal only reduces "Savings Added" in Credits and
-  // does not flow back into spendable cash anywhere else.
-  const remaining   = totalIncome + carryover - totalOut;
+  // Net Balance = what's actually left to spend. Money sitting in Savings
+  // is yours, but it's set aside, not spendable — so it's subtracted here
+  // even though it was added under Credits → Savings Added. This keeps
+  // "Total In" showing your full incoming cash while "Net Balance" shows
+  // only what's truly free to use right now.
+  const remaining   = totalIncome + carryover - totalOut - savingsLifetimeBalance;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtSigned = n => (n>=0?'+':'')+'₱'+Math.abs(n).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
