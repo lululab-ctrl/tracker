@@ -3457,6 +3457,40 @@ function fillSavingsList() {
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const lifetimeTotal = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
 
+  // Activity log resets each month: only entries whose internal date falls in
+  // the CURRENT real-world month are shown. This is always "this month's
+  // activity" — it naturally clears itself once a new month begins, without
+  // needing any manual reset.
+  const nowYM = (() => { const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); })();
+  const thisMonthEntries = DB.budgetSavings
+    .filter(g=>(g.date||'').slice(0,7)===nowYM)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.id||'').localeCompare(a.id||''));
+
+  function logRow(g) {
+    const isWithdraw = parseFloat(g.amount||0) < 0;
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-light)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.notes||(isWithdraw?'Withdrawal':'Savings')}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-family:var(--font-display);font-size:.88rem;color:${isWithdraw?'var(--red)':'var(--green)'}">${isWithdraw?'−':'+'}₱${fmt(Math.abs(g.amount))}</span>
+        <button onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))"
+          style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:.7rem;padding:2px 4px;line-height:1"
+          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-light)'">✕</button>
+      </div>
+    </div>`;
+  }
+
+  const logHtml = thisMonthEntries.length
+    ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light)">
+        <div style="font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:8px">This Month's Activity</div>
+        ${thisMonthEntries.map(logRow).join('')}
+      </div>`
+    : `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light);text-align:center">
+        <div style="font-size:.72rem;color:var(--text-light)">No activity yet this month.</div>
+      </div>`;
+
   el.innerHTML = `
     <div style="text-align:center;padding:6px 0 16px">
       <div style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:4px">Current Balance</div>
@@ -3472,6 +3506,7 @@ function fillSavingsList() {
       <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="logSavingsEntry(1)">+ Add</button>
       <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="logSavingsEntry(-1)">− Withdraw</button>
     </div>
+    ${logHtml}
   `;
 }
 
@@ -3497,12 +3532,13 @@ function logSavingsEntry(sign) {
     id: uid(),
     amount: sign * amt,
     notes: (noteInput?.value||'').trim() || (sign<0?'Withdrawal':'Savings'),
-    // Internal timestamp only, never shown or editable — purely for record-keeping order.
+    // Internal timestamp only, never user-editable — used purely so the
+    // monthly activity log knows which entries belong to the current month.
     date: td()
   });
   save();
-  // Clear inputs and re-render just the savings + Money in Bank figures,
-  // ready for the next entry without reopening anything.
+  // Clear inputs and re-render the savings card, ready for the next entry
+  // without reopening anything.
   renderBudget(document.getElementById('content'));
 }
 
