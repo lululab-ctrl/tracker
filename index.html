@@ -3761,7 +3761,10 @@ function fillPaymentInfoList() {
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${p.label||'Untitled'}</div>
-          ${p.bank?`<div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${p.bank}</div>`:''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:1px">
+            ${p.bank?`<span style="font-size:.68rem;color:var(--text-light)">${p.bank}</span>`:''}
+            ${p.notes?`<span style="font-size:.68rem;color:var(--text-light);font-style:italic">${p.bank?'· ':''}${p.notes}</span>`:''}
+          </div>
         </div>
       </div>
       ${hasAcct?`
@@ -3773,7 +3776,6 @@ function fillPaymentInfoList() {
       <div style="text-align:center;margin-top:8px">
         <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
       </div>`:''}
-      ${p.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${p.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openPaymentInfoModal('${p.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delItem('paymentInfo','${p.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
