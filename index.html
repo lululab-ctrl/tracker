@@ -3770,13 +3770,16 @@ function fillPaymentInfoList() {
       ${hasAcct?`
       <div style="border-radius:var(--radius-sm);margin-top:8px;overflow:hidden">
         ${p.accountName?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountName" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s;${p.accountNumber?'border-bottom:1px solid var(--border-light)':''}" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-size:.82rem;color:var(--text);word-break:break-word">${p.accountName}</div></div>`:''}
-        ${p.accountNumber?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountNumber" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-family:var(--font-display);font-size:.95rem;color:var(--accent);letter-spacing:.02em;word-break:break-all">${p.accountNumber}</div></div>`:''}
+        ${p.accountNumber?`<div style="display:flex;align-items:center">
+          <div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountNumber" style="flex:1;padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-family:var(--font-display);font-size:.95rem;color:var(--accent);letter-spacing:.02em;word-break:break-all">${p.accountNumber}</div></div>
+          ${p.qrImage?`<button onclick="event.stopPropagation();toggleQrVisibility('${p.id}')" title="See QR Code" style="background:none;border:none;cursor:pointer;padding:9px 12px;flex-shrink:0;color:var(--text-light);font-size:1rem;line-height:1" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-light)'">▦</button>`:''}
+        </div>`:''}
       </div>`:''}
       ${p.qrImage?`
-      <div style="margin-top:8px">
-        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="toggleQrVisibility('${p.id}')">See QR Code</button>
-        <div id="qrWrap-${p.id}" style="display:none;text-align:center;margin-top:8px">
-          <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
+      <div id="qrWrap-${p.id}" style="display:none;text-align:center;margin-top:8px">
+        <div style="position:relative;display:inline-block">
+          <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light);display:block">
+          <button onclick="event.stopPropagation();toggleQrVisibility('${p.id}')" title="Close" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(20,16,12,.6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem;line-height:1">✕</button>
         </div>
       </div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
@@ -3793,14 +3796,13 @@ function fillPaymentInfoList() {
 }
 
 // Toggles the hidden QR code image for a payment info card. The QR stays
-// hidden by default and only renders once the user explicitly taps to see it.
+// hidden by default and only renders once the user explicitly taps the
+// small QR icon beside the account number.
 function toggleQrVisibility(id) {
   const wrap = document.getElementById('qrWrap-' + id);
   if(!wrap) return;
-  const btn = wrap.previousElementSibling;
   const showing = wrap.style.display !== 'none';
   wrap.style.display = showing ? 'none' : 'block';
-  if(btn) btn.textContent = showing ? 'See QR Code' : 'Hide QR Code';
 }
 
 function openPaymentInfoModal(id) {
