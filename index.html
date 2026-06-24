@@ -3101,10 +3101,19 @@ function renderBudget(c) {
   const totalRecurr = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
   // Variable expenses filtered to selected month
   const varForMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth);
-  const totalVar    = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  // Savings also filtered to selected month
-  const savingsForMonth = (DB.budgetSavings||[]).filter(g=>(g.date||'').slice(0,7)===budgetMonth);
-  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  // Unpaid receivables count as a variable expense in the month they were lent —
+  // money that left your pocket and hasn't come back yet. Paid-back receivables
+  // are excluded since the cash has already returned to you.
+  if(!DB.budgetReceivables) DB.budgetReceivables=[];
+  const unpaidReceivablesForMonth = DB.budgetReceivables.filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth);
+  const totalVar = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0)
+                  + unpaidReceivablesForMonth.reduce((s,r)=>s+parseFloat(r.amount||0),0);
+  // Savings: lifetime balance (all deposits minus all withdrawals, ever) +
+  // this month's net change (for the Debits "set aside" line and carryover math)
+  if(!DB.budgetSavings) DB.budgetSavings=[];
+  const savingsLifetimeBalance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  const savingsForMonth = DB.budgetSavings.filter(g=>(g.date||'').slice(0,7)===budgetMonth);
+  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0); // this month's net change (can be negative on withdrawal)
 
   // ── Carryover: net surplus/deficit from all prior months ──
   // Only carry what's LEFT after income - recurring - variable each month.
@@ -3119,7 +3128,7 @@ function renderBudget(c) {
   const earliestMonth = allTxMonths[0] || null;
 
   // Compute cumulative net from earliestMonth up to (not including) targetYM
-  // Net per month = income - recurring - varExpenses
+  // Net per month = income - recurring - varExpenses - (this month's savings change)
   // Carryover into targetYM is the running balance of all prior months
   function computeCarryover(targetYM) {
     if(!earliestMonth || earliestMonth >= targetYM) return 0;
@@ -3132,11 +3141,11 @@ function renderBudget(c) {
       const varExp = DB.budgetVarExp
         .filter(e=>(e.date||'').slice(0,7)===cur)
         .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-      const savExp = (DB.budgetSavings||[])
+      const savChange = (DB.budgetSavings||[])
         .filter(g=>(g.date||'').slice(0,7)===cur)
         .reduce((s,g)=>s+parseFloat(g.amount||0),0);
-      // Net for this month: what's left after paying everything + savings set aside
-      const net = inc - rec - varExp - savExp;
+      // Net for this month: what's left after paying everything + this month's savings change
+      const net = inc - rec - varExp - savChange;
       carry += net;
       // Advance one month
       const [y,m] = cur.split('-').map(Number);
@@ -3217,10 +3226,10 @@ function renderBudget(c) {
           <span style="font-weight:600;color:${carryover>=0?'var(--green)':'var(--red)'}">${fmtSigned(carryover)}</span>
         </div>`:''}
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
-          <span>Savings Added</span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
+          <span>Savings Added <span style="font-size:.65rem;color:var(--text-light)">(balance)</span></span><span style="font-weight:600">₱${fmt(savingsLifetimeBalance)}</span>
         </div>
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--green)">
-          <span>Total In</span><span>₱${fmt(totalIncome+totalSaved+(carryover>0?carryover:0))}</span>
+          <span>Total In</span><span>₱${fmt(totalIncome+savingsLifetimeBalance+(carryover>0?carryover:0))}</span>
         </div>
       </div>
       <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 14px">
@@ -3232,7 +3241,7 @@ function renderBudget(c) {
           <span>Variable Expenses</span><span style="font-weight:600">₱${fmt(totalVar)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
-          <span>Savings (set aside)</span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
+          <span>Savings (set aside) <span style="font-size:.65rem;color:var(--text-light)">this month</span></span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
         </div>
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--red)">
           <span>Total Out</span><span>₱${fmt(totalOut)}</span>
@@ -3274,7 +3283,7 @@ function renderBudget(c) {
       <div id="incomeList"></div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
-      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button></div>
+      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div><div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button><button class="btn btn-ghost btn-sm" onclick="openWithdrawSavingsModal()">− Withdraw</button></div></div>
       <div id="savingsList"></div>
     </div>
   </div>
@@ -3428,14 +3437,15 @@ function fillSavingsList() {
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const el = document.getElementById('savingsList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const sorted = [...DB.budgetSavings]
-    .filter(g=>(g.date||'').slice(0,7)===budgetMonth)
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
   if(!sorted.length) {
-    el.innerHTML=`<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No savings added for this month yet.</div></div>`;
+    el.innerHTML = `<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No transactions yet.<br>Add savings or withdraw whenever you need to.</div></div>`;
     return;
   }
-  const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+
+  let html = '';
   const visible = sorted.slice(0,5);
   const hidden  = sorted.slice(5);
 
@@ -3447,17 +3457,17 @@ function fillSavingsList() {
         dateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       }
     } catch(e){}
+    const isWithdraw = parseFloat(g.amount||0) < 0;
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:110px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:100px">
       <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||'Savings'}</div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||(isWithdraw?'Withdrawal':'Savings')}</div>
           <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${dateLabel}</div>
-          <div style="height:26px"></div><!-- spacer matches income chip height -->
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--green)">₱${fmt(g.amount)}</div>
-          <span style="display:inline-flex;align-items:center;background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">saved</span>
+          <div style="font-family:var(--font-display);font-size:1.15rem;color:${isWithdraw?'var(--red)':'var(--green)'}">${isWithdraw?'−':'+'}₱${fmt(Math.abs(g.amount))}</div>
+          <span style="display:inline-flex;align-items:center;background:${isWithdraw?'var(--red-bg)':'var(--green-bg)'};color:${isWithdraw?'var(--red)':'var(--green)'};border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">${isWithdraw?'withdrawn':'saved'}</span>
         </div>
       </div>
       <div style="display:flex;gap:5px;margin-top:auto">
@@ -3467,11 +3477,13 @@ function fillSavingsList() {
     </div>`;
   }
 
-  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px;display:flex;justify-content:space-between">
-    <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
-    <span style="font-weight:600;color:var(--green)">Total: ₱${fmt(total)}</span>
+  const lifetimeTotal = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  html += `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px;display:flex;justify-content:space-between">
+    <span>${sorted.length} transaction${sorted.length!==1?'s':''}</span>
+    <span style="font-weight:600;color:var(--green)">Balance: ₱${fmt(lifetimeTotal)}</span>
   </div>`;
-  visible.forEach(g=>{ el.innerHTML += savCard(g); });
+  visible.forEach(g=>{ html += savCard(g); });
+  el.innerHTML = html;
   if(hidden.length) {
     const hd = document.createElement('div');
     hd.id='savingsExtra'; hd.style.display='none';
@@ -3489,25 +3501,56 @@ function fillSavingsList() {
 function openSavingsModal(id) {
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const item = id ? DB.budgetSavings.find(x=>x.id===id)||{} : {};
-  openModal(id?'Edit Savings Entry':'Add to Savings', `
-    <div class="form-group"><label class="form-label">Amount Saved (₱)</label>
-      <input class="form-input" id="f_samt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+  const isEditingWithdrawal = id && parseFloat(item.amount||0) < 0;
+  openModal(id?(isEditingWithdrawal?'Edit Withdrawal':'Edit Savings Entry'):'Add to Savings', `
+    <div class="form-group"><label class="form-label">Amount ${isEditingWithdrawal?'Withdrawn':'Saved'} (₱)</label>
+      <input class="form-input" id="f_samt" type="number" step="0.01" placeholder="0.00" value="${Math.abs(item.amount||'')||''}">
     </div>
     <div class="form-group"><label class="form-label">Notes <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
       <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="e.g. From salary, bonus, savings challenge...">${item.notes||''}</textarea>
     </div>
-    ${id?`<div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_sdate" type="date" value="${item.date||td()}"></div>`:''}
+    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_sdate" type="date" value="${item.date||td()}"></div>
   `, () => {
+    const amt = Math.abs(parseFloat(fv('f_samt'))||0);
+    if(!amt){ alert('Please enter an amount.'); return; }
+    const signedAmt = isEditingWithdrawal ? -amt : amt;
     const obj = {
       id:id||uid(),
-      amount:fv('f_samt'),
+      amount:signedAmt,
       notes:fv('f_snotes'),
-      date: id ? fv('f_sdate') : td()
+      date: fv('f_sdate') || td()
     };
     if(id) { const i=DB.budgetSavings.findIndex(x=>x.id===id); DB.budgetSavings[i]=obj; }
     else DB.budgetSavings.push(obj);
     save(); closeModal(); renderBudget(document.getElementById('content'));
   });
+}
+
+function openWithdrawSavingsModal() {
+  if(!DB.budgetSavings) DB.budgetSavings=[];
+  const balance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  openModal('Withdraw from Savings', `
+    <p style="font-size:.78rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Current balance: <strong style="color:var(--green)">₱${fmt(balance)}</strong></p>
+    <div class="form-group"><label class="form-label">Amount to Withdraw (₱)</label>
+      <input class="form-input" id="f_wamt" type="number" step="0.01" placeholder="0.00" max="${balance}">
+    </div>
+    <div class="form-group"><label class="form-label">Reason <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
+      <textarea class="form-textarea" id="f_wnotes" rows="2" placeholder="e.g. Emergency, planned purchase..."></textarea>
+    </div>
+    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_wdate" type="date" value="${td()}"></div>
+  `, () => {
+    const amt = Math.abs(parseFloat(fv('f_wamt'))||0);
+    if(!amt){ alert('Please enter an amount to withdraw.'); return; }
+    if(amt > balance){ alert('You cannot withdraw more than the current balance (₱'+fmt(balance)+').'); return; }
+    DB.budgetSavings.push({
+      id:uid(),
+      amount:-amt,
+      notes:fv('f_wnotes')||'Withdrawal',
+      date:fv('f_wdate')||td()
+    });
+    save(); closeModal(); renderBudget(document.getElementById('content'));
+  }, false, 'Withdraw');
 }
 
 function fillRecurringList() {
@@ -3578,52 +3621,75 @@ function fillRecurringList() {
 
 function fillVarExpList() {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
+  if(!DB.budgetReceivables) DB.budgetReceivables=[];
   const el = document.getElementById('varExpList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const filterVal = document.getElementById('varFilter')?.value||'';
-  // Filter to selected month first
-  let sorted = [...DB.budgetVarExp]
+
+  // Regular variable expenses for the month
+  const varItems = DB.budgetVarExp
     .filter(e=>(e.date||'').slice(0,7)===budgetMonth)
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  if(filterVal==='paid')   sorted = sorted.filter(e=>e.paid);
-  if(filterVal==='unpaid') sorted = sorted.filter(e=>!e.paid);
-  if(!sorted.length) {
-    const allInMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth).length;
+    .map(e=>({...e, _source:'var'}));
+
+  // Unpaid receivables for the month — shown here too since lending money is
+  // a cash outflow until it's paid back. Once paid, it drops out of this list.
+  const receivableItems = DB.budgetReceivables
+    .filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth)
+    .map(r=>({
+      id:r.id, label:r.lentTo||'Receivable', amount:r.amount, date:r.date,
+      notes:r.notes, paid:false, category:'Lent Out', _source:'receivable'
+    }));
+
+  let combined = [...varItems, ...receivableItems].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(filterVal==='paid')   combined = combined.filter(e=>e.paid);
+  if(filterVal==='unpaid') combined = combined.filter(e=>!e.paid);
+
+  if(!combined.length) {
+    const allInMonth = varItems.length + receivableItems.length;
     el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">${allInMonth&&filterVal?'No items match the filter.':'No variable expenses for this month yet.'}</p></div>`;
     return;
   }
-  const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const varVisible = sorted.slice(0,5);
-  const varHidden  = sorted.slice(5);
+  const total = combined.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const varVisible = combined.slice(0,5);
+  const varHidden  = combined.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
+      <span>${combined.length} entr${combined.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--purple)">Total: ₱${fmt(total)}</span>
     </div>`;
-  function varCard(e){ return `
-    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--purple)">
+  function varCard(e){
+    const isReceivable = e._source === 'receivable';
+    const editAction = isReceivable ? `openReceivableModal('${e.id}')` : `openVarExpModal('${e.id}')`;
+    const deleteAction = isReceivable
+      ? `delItem('budgetReceivables','${e.id}',()=>renderBudget(document.getElementById('content')))`
+      : `delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))`;
+    const paidToggle = isReceivable
+      ? `toggleReceivablePaid('${e.id}')`
+      : `toggleVarPaid('${e.id}')`;
+    return `
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid ${isReceivable?'var(--amber)':'var(--purple)'}">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${e.label}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            ${e.category?`<span class="chip">${e.category}</span>`:''}
+            ${e.category?`<span class="chip" style="${isReceivable?'border-color:var(--amber);color:var(--amber)':''}">${e.category}</span>`:''}
             ${e.date?`<span style="font-size:.65rem;color:var(--text-light)">${e.date}</span>`:''}
-            ${e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
+            ${!isReceivable&&e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--purple)">₱${fmt(e.amount)}</div>
-            ${e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:${isReceivable?'var(--amber)':'var(--purple)'}">₱${fmt(e.amount)}</div>
+            ${!isReceivable&&e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
           </div>
       </div>
       ${e.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${e.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
         ${e.paid
-          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">✓ Paid</span>`
-          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">Unpaid</span>`
+          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="${paidToggle}">✓ Paid</span>`
+          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="${paidToggle}">${isReceivable?'Owed to you':'Unpaid'}</span>`
         }
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openVarExpModal('${e.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${editAction}">${isReceivable?'View':'Edit'}</button>
+        <button class="btn btn-danger btn-sm" onclick="${deleteAction}">✕</button>
       </div>
     </div>`; }
   varVisible.forEach(e=>{ el.innerHTML += varCard(e); });
@@ -3769,33 +3835,29 @@ function fillPaymentInfoList() {
   const hidden  = DB.paymentInfo.slice(5);
 
   function piCard(p) {
+    const hasAcct = p.accountName || p.accountNumber;
     return `
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--blue)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${p.label||'Untitled'}</div>
           ${p.bank?`<div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${p.bank}</div>`:''}
         </div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-ghost btn-sm" onclick="openPaymentInfoModal('${p.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="delItem('paymentInfo','${p.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
-        </div>
       </div>
-      ${p.accountName?`
-      <div class="copy-acct-row" data-acct-id="${p.id}" data-copy-field="accountName" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
-        <span style="flex:1;font-size:.82rem;color:var(--text);word-break:break-word">${p.accountName}</span>
-        <span class="copy-acct-hint" style="flex-shrink:0;font-size:.65rem;color:var(--text-light);letter-spacing:.04em">tap to copy</span>
-      </div>`:''}
-      ${p.accountNumber?`
-      <div class="copy-acct-row" data-acct-id="${p.id}" data-copy-field="accountNumber" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
-        <span style="flex:1;font-family:var(--font-display);font-size:.95rem;color:var(--text);letter-spacing:.03em;word-break:break-all">${p.accountNumber}</span>
-        <span class="copy-acct-hint" style="flex-shrink:0;font-size:.65rem;color:var(--text-light);letter-spacing:.04em">tap to copy</span>
+      ${hasAcct?`
+      <div style="border-radius:var(--radius-sm);margin-top:8px;overflow:hidden">
+        ${p.accountName?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountName" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s;${p.accountNumber?'border-bottom:1px solid var(--border-light)':''}" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-size:.82rem;color:var(--text);word-break:break-word">${p.accountName}</div></div>`:''}
+        ${p.accountNumber?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountNumber" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-family:var(--font-display);font-size:.95rem;color:var(--accent);letter-spacing:.02em;word-break:break-all">${p.accountNumber}</div></div>`:''}
       </div>`:''}
       ${p.qrImage?`
-      <div style="text-align:center;margin-bottom:8px">
-        <img src="${p.qrImage}" style="max-width:160px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
+      <div style="text-align:center;margin-top:8px">
+        <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
       </div>`:''}
-      ${p.notes?`<div style="font-size:.72rem;color:var(--text-light);font-style:italic">${p.notes}</div>`:''}
+      ${p.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${p.notes}</div>`:''}
+      <div style="display:flex;gap:5px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openPaymentInfoModal('${p.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('paymentInfo','${p.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
+      </div>
     </div>`;
   }
 
@@ -3868,14 +3930,17 @@ function previewPaymentQR(inp) {
   r.readAsDataURL(inp.files[0]);
 }
 
-function copyToClipboard(text, btnEl) {
+function copyToClipboard(text, fieldEl) {
   const doCopy = () => {
-    if(btnEl) {
-      const original = btnEl.textContent;
-      btnEl.textContent = '✓ copied';
-      btnEl.style.color = 'var(--green)';
-      btnEl.style.fontWeight = '600';
-      setTimeout(()=>{ btnEl.textContent = original; btnEl.style.color = ''; btnEl.style.fontWeight = ''; }, 1500);
+    if(fieldEl) {
+      const prevBg = fieldEl.style.background;
+      fieldEl.style.background = 'var(--green-bg)';
+      const badge = document.createElement('span');
+      badge.textContent = '✓ Copied';
+      badge.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:.65rem;font-weight:600;color:var(--green);background:var(--surface);padding:2px 8px;border-radius:10px;pointer-events:none';
+      fieldEl.style.position = 'relative';
+      fieldEl.appendChild(badge);
+      setTimeout(()=>{ fieldEl.style.background = prevBg; badge.remove(); }, 1200);
     }
   };
   if(navigator.clipboard && navigator.clipboard.writeText) {
@@ -3894,18 +3959,17 @@ function copyToClipboard(text, btnEl) {
   }
 }
 
-// Event delegation for tappable account-name/account-number rows — avoids ever
-// embedding raw account text inside an inline onclick attribute string.
+// Event delegation for individually tappable account-name/account-number
+// fields — each copies only its own value. Avoids ever embedding raw account
+// text inside an inline onclick attribute string.
 document.addEventListener('click', function(e) {
-  const row = e.target.closest('.copy-acct-row');
-  if(!row) return;
-  const id = row.getAttribute('data-acct-id');
-  const field = row.getAttribute('data-copy-field') || 'accountNumber';
-  if(!id || !DB.paymentInfo) return;
+  const field = e.target.closest('.copy-acct-field');
+  if(!field) return;
+  const id = field.getAttribute('data-acct-id');
+  const key = field.getAttribute('data-copy-field');
+  if(!id || !key || !DB.paymentInfo) return;
   const item = DB.paymentInfo.find(x=>x.id===id);
-  if(!item || !item[field]) return;
-  const hint = row.querySelector('.copy-acct-hint');
-  copyToClipboard(item[field], hint);
+  if(item && item[key]) copyToClipboard(item[key], field);
 });
 
 function addDays(dateStr, days) {
