@@ -3621,75 +3621,52 @@ function fillRecurringList() {
 
 function fillVarExpList() {
   if(!DB.budgetVarExp) DB.budgetVarExp=[];
-  if(!DB.budgetReceivables) DB.budgetReceivables=[];
   const el = document.getElementById('varExpList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const filterVal = document.getElementById('varFilter')?.value||'';
-
-  // Regular variable expenses for the month
-  const varItems = DB.budgetVarExp
+  // Filter to selected month first
+  let sorted = [...DB.budgetVarExp]
     .filter(e=>(e.date||'').slice(0,7)===budgetMonth)
-    .map(e=>({...e, _source:'var'}));
-
-  // Unpaid receivables for the month — shown here too since lending money is
-  // a cash outflow until it's paid back. Once paid, it drops out of this list.
-  const receivableItems = DB.budgetReceivables
-    .filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth)
-    .map(r=>({
-      id:r.id, label:r.lentTo||'Receivable', amount:r.amount, date:r.date,
-      notes:r.notes, paid:false, category:'Lent Out', _source:'receivable'
-    }));
-
-  let combined = [...varItems, ...receivableItems].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  if(filterVal==='paid')   combined = combined.filter(e=>e.paid);
-  if(filterVal==='unpaid') combined = combined.filter(e=>!e.paid);
-
-  if(!combined.length) {
-    const allInMonth = varItems.length + receivableItems.length;
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(filterVal==='paid')   sorted = sorted.filter(e=>e.paid);
+  if(filterVal==='unpaid') sorted = sorted.filter(e=>!e.paid);
+  if(!sorted.length) {
+    const allInMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth).length;
     el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">📌</div><p style="font-size:.8rem">${allInMonth&&filterVal?'No items match the filter.':'No variable expenses for this month yet.'}</p></div>`;
     return;
   }
-  const total = combined.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const varVisible = combined.slice(0,5);
-  const varHidden  = combined.slice(5);
+  const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const varVisible = sorted.slice(0,5);
+  const varHidden  = sorted.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>${combined.length} entr${combined.length!==1?'ies':'y'}</span>
+      <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--purple)">Total: ₱${fmt(total)}</span>
     </div>`;
-  function varCard(e){
-    const isReceivable = e._source === 'receivable';
-    const editAction = isReceivable ? `openReceivableModal('${e.id}')` : `openVarExpModal('${e.id}')`;
-    const deleteAction = isReceivable
-      ? `delItem('budgetReceivables','${e.id}',()=>renderBudget(document.getElementById('content')))`
-      : `delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))`;
-    const paidToggle = isReceivable
-      ? `toggleReceivablePaid('${e.id}')`
-      : `toggleVarPaid('${e.id}')`;
-    return `
-    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid ${isReceivable?'var(--amber)':'var(--purple)'}">
+  function varCard(e){ return `
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--purple)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:2px">${e.label}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            ${e.category?`<span class="chip" style="${isReceivable?'border-color:var(--amber);color:var(--amber)':''}">${e.category}</span>`:''}
+            ${e.category?`<span class="chip">${e.category}</span>`:''}
             ${e.date?`<span style="font-size:.65rem;color:var(--text-light)">${e.date}</span>`:''}
-            ${!isReceivable&&e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
+            ${e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:var(--font-display);font-size:1.1rem;color:${isReceivable?'var(--amber)':'var(--purple)'}">₱${fmt(e.amount)}</div>
-            ${!isReceivable&&e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--purple)">₱${fmt(e.amount)}</div>
+            ${e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
           </div>
       </div>
       ${e.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${e.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
         ${e.paid
-          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="${paidToggle}">✓ Paid</span>`
-          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="${paidToggle}">${isReceivable?'Owed to you':'Unpaid'}</span>`
+          ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">✓ Paid</span>`
+          :`<span style="font-size:.65rem;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">Unpaid</span>`
         }
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${editAction}">${isReceivable?'View':'Edit'}</button>
-        <button class="btn btn-danger btn-sm" onclick="${deleteAction}">✕</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openVarExpModal('${e.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
     </div>`; }
   varVisible.forEach(e=>{ el.innerHTML += varCard(e); });
