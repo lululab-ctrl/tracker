@@ -3301,7 +3301,7 @@ function renderBudget(c) {
       <div id="incomeList"></div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)">
-      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div><div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="openSavingsModal()">+ Add</button><button class="btn btn-ghost btn-sm" onclick="openWithdrawSavingsModal()">− Withdraw</button></div></div>
+      <div class="sec-head" style="margin-bottom:12px"><div class="sec-title">🐷 Savings</div></div>
       <div id="savingsList"></div>
     </div>
   </div>
@@ -3455,115 +3455,55 @@ function fillSavingsList() {
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const el = document.getElementById('savingsList'); if(!el) return;
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const lifetimeTotal = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
 
-  const sorted = [...DB.budgetSavings].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-
-  if(!sorted.length) {
-    el.innerHTML = `<div style="text-align:center;padding:32px 16px;color:var(--text-light)"><div style="font-size:1.8rem;opacity:.3;margin-bottom:8px">🐷</div><div style="font-size:.8rem">No transactions yet.<br>Add savings or withdraw whenever you need to.</div></div>`;
-    return;
-  }
-
-  let html = '';
-  const visible = sorted.slice(0,5);
-  const hidden  = sorted.slice(5);
-
-  function savCard(g) {
-    const isWithdraw = parseFloat(g.amount||0) < 0;
-    return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:80px">
-      <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||(isWithdraw?'Withdrawal':'Savings')}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--font-display);font-size:1.15rem;color:${isWithdraw?'var(--red)':'var(--green)'}">${isWithdraw?'−':'+'}₱${fmt(Math.abs(g.amount))}</div>
-          <span style="display:inline-flex;align-items:center;background:${isWithdraw?'var(--red-bg)':'var(--green-bg)'};color:${isWithdraw?'var(--red)':'var(--green)'};border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:600;margin-top:2px">${isWithdraw?'withdrawn':'saved'}</span>
-        </div>
-      </div>
-      <div style="display:flex;gap:5px;margin-top:auto">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openSavingsModal('${g.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delItem('budgetSavings','${g.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
-      </div>
-    </div>`;
-  }
-
-  const lifetimeTotal = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  html += `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:8px;display:flex;justify-content:space-between">
-    <span>${sorted.length} transaction${sorted.length!==1?'s':''}</span>
-    <span style="font-weight:600;color:var(--green)">Balance: ₱${fmt(lifetimeTotal)}</span>
-  </div>`;
-  visible.forEach(g=>{ html += savCard(g); });
-  el.innerHTML = html;
-  if(hidden.length) {
-    const hd = document.createElement('div');
-    hd.id='savingsExtra'; hd.style.display='none';
-    hidden.forEach(g=>{ hd.innerHTML += savCard(g); });
-    el.appendChild(hd);
-    const tb = document.createElement('button');
-    tb.className='btn btn-ghost btn-sm';
-    tb.style.cssText='width:100%;margin-top:6px;font-size:.7rem';
-    tb.textContent=`Show ${hidden.length} more`;
-    tb.onclick=function(){ const d=document.getElementById('savingsExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
-    el.appendChild(tb);
-  }
+  el.innerHTML = `
+    <div style="text-align:center;padding:6px 0 16px">
+      <div style="font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:4px">Current Balance</div>
+      <div style="font-family:var(--font-display);font-size:1.7rem;color:var(--green)">₱${fmt(lifetimeTotal)}</div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <input class="form-input" id="f_savAmt" type="number" inputmode="decimal" step="0.01" placeholder="Enter amount (₱)" style="text-align:center;font-family:var(--font-display);font-size:1.1rem">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <input class="form-input" id="f_savNote" type="text" placeholder="Note (optional)" style="font-size:.8rem">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="logSavingsEntry(1)">+ Add</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="logSavingsEntry(-1)">− Withdraw</button>
+    </div>
+  `;
 }
 
-function openSavingsModal(id) {
+// Logs a single savings transaction directly from the inline card —
+// no modal, no per-entry list. The card's inputs clear immediately after
+// so it's ready for the next entry. sign: 1 for deposit, -1 for withdrawal.
+function logSavingsEntry(sign) {
   if(!DB.budgetSavings) DB.budgetSavings=[];
-  const item = id ? DB.budgetSavings.find(x=>x.id===id)||{} : {};
-  const isEditingWithdrawal = id && parseFloat(item.amount||0) < 0;
-  openModal(id?(isEditingWithdrawal?'Edit Withdrawal':'Edit Savings Entry'):'Add to Savings', `
-    <div class="form-group"><label class="form-label">Amount ${isEditingWithdrawal?'Withdrawn':'Saved'} (₱)</label>
-      <input class="form-input" id="f_samt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${Math.abs(item.amount||'')||''}">
-    </div>
-    <div class="form-group"><label class="form-label">Notes <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
-      <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="e.g. From salary, bonus, savings challenge...">${item.notes||''}</textarea>
-    </div>
-  `, () => {
-    const amt = Math.abs(parseFloat(fv('f_samt'))||0);
-    if(!amt){ alert('Please enter an amount.'); return; }
-    const signedAmt = isEditingWithdrawal ? -amt : amt;
-    const obj = {
-      id:id||uid(),
-      amount:signedAmt,
-      notes:fv('f_snotes'),
-      // No date input from the user — this is a simple running log, not a
-      // dated transaction. We still stamp a timestamp internally so entries
-      // sort in the order they were added, but the user never sees or sets it.
-      date: item.date || td()
-    };
-    if(id) { const i=DB.budgetSavings.findIndex(x=>x.id===id); DB.budgetSavings[i]=obj; }
-    else DB.budgetSavings.push(obj);
-    save(); closeModal(); renderBudget(document.getElementById('content'));
+  const amtInput = document.getElementById('f_savAmt');
+  const noteInput = document.getElementById('f_savNote');
+  const amt = Math.abs(parseFloat(amtInput?.value)||0);
+  if(!amt){ alert('Please enter an amount.'); return; }
+
+  if(sign < 0) {
+    const balance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
+    if(amt > balance) {
+      alert('You cannot withdraw more than the current balance (₱'+balance.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})+').');
+      return;
+    }
+  }
+
+  DB.budgetSavings.push({
+    id: uid(),
+    amount: sign * amt,
+    notes: (noteInput?.value||'').trim() || (sign<0?'Withdrawal':'Savings'),
+    // Internal timestamp only, never shown or editable — purely for record-keeping order.
+    date: td()
   });
-}
-
-function openWithdrawSavingsModal() {
-  if(!DB.budgetSavings) DB.budgetSavings=[];
-  const balance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  openModal('Withdraw from Savings', `
-    <p style="font-size:.78rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Current balance: <strong style="color:var(--green)">₱${fmt(balance)}</strong></p>
-    <div class="form-group"><label class="form-label">Amount to Withdraw (₱)</label>
-      <input class="form-input" id="f_wamt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" max="${balance}">
-    </div>
-    <div class="form-group"><label class="form-label">Reason <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
-      <textarea class="form-textarea" id="f_wnotes" rows="2" placeholder="e.g. Emergency, planned purchase..."></textarea>
-    </div>
-  `, () => {
-    const amt = Math.abs(parseFloat(fv('f_wamt'))||0);
-    if(!amt){ alert('Please enter an amount to withdraw.'); return; }
-    if(amt > balance){ alert('You cannot withdraw more than the current balance (₱'+fmt(balance)+').'); return; }
-    DB.budgetSavings.push({
-      id:uid(),
-      amount:-amt,
-      notes:fv('f_wnotes')||'Withdrawal',
-      // Simple log entry — no user-facing date field, just stamped internally
-      // for ordering purposes.
-      date:td()
-    });
-    save(); closeModal(); renderBudget(document.getElementById('content'));
-  }, false, 'Withdraw');
+  save();
+  // Clear inputs and re-render just the savings + Money in Bank figures,
+  // ready for the next entry without reopening anything.
+  renderBudget(document.getElementById('content'));
 }
 
 function fillRecurringList() {
@@ -4307,8 +4247,8 @@ function openBudgetQuickAdd() {
       <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openIncomeModal,100)">
         💰 <span style="margin-left:6px">Income Source</span>
       </button>
-      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openSavingsModal,100)">
-        🐷 <span style="margin-left:6px">Savings</span>
+      <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(()=>document.getElementById('savingsList')?.scrollIntoView({behavior:'smooth',block:'center'}),100)">
+        🐷 <span style="margin-left:6px">Savings (use the card below)</span>
       </button>
       <button class="btn btn-ghost" style="justify-content:flex-start;padding:12px 16px" onclick="closeModal();setTimeout(openRecurringModal,100)">
         🔁 <span style="margin-left:6px">Recurring Expense</span>
