@@ -3774,12 +3774,8 @@ function fillPaymentInfoList() {
         ${p.accountName?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountName" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s;${p.accountNumber?'border-bottom:1px solid var(--border-light)':''}" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-size:.82rem;color:var(--text);word-break:break-word">${p.accountName}</div></div>`:''}
         ${p.accountNumber?`<div style="display:flex;align-items:center">
           <div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountNumber" style="flex:1;padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-family:var(--font-display);font-size:.95rem;color:var(--accent);letter-spacing:.02em;word-break:break-all">${p.accountNumber}</div></div>
-          ${p.qrImage?`<button id="qrBtn-${p.id}" onclick="event.stopPropagation();toggleQrVisibility('${p.id}')" title="See QR Code" style="background:none;border:none;cursor:pointer;padding:9px 12px;flex-shrink:0;color:var(--text-light);font-size:1rem;line-height:1" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-light)'">▦</button>`:''}
+          ${p.qrImage?`<button id="qrBtn-${p.id}" onclick="event.stopPropagation();showQrOverlay('${p.id}')" title="See QR Code" style="background:none;border:none;cursor:pointer;padding:9px 12px;flex-shrink:0;color:var(--text-light);font-size:1rem;line-height:1" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-light)'">▦</button>`:''}
         </div>`:''}
-      </div>`:''}
-      ${p.qrImage?`
-      <div id="qrWrap-${p.id}" style="display:none;text-align:center;margin-top:8px">
-        <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
       </div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openPaymentInfoModal('${p.id}')">Edit</button>
@@ -3794,16 +3790,41 @@ function fillPaymentInfoList() {
   if(scrollEl) DB.paymentInfo.forEach(p=>{ scrollEl.innerHTML += piCard(p); });
 }
 
-// Toggles the hidden QR code image for a payment info card. Tapping the
-// same QR icon again closes it — there is no separate close button.
-function toggleQrVisibility(id) {
-  const wrap = document.getElementById('qrWrap-' + id);
-  const btn = document.getElementById('qrBtn-' + id);
-  if(!wrap) return;
-  const showing = wrap.style.display !== 'none';
-  wrap.style.display = showing ? 'none' : 'block';
-  if(btn) btn.style.color = showing ? '' : 'var(--accent)';
+// Opens a large full-screen overlay showing the QR code, much bigger than
+// the card itself so it's easy to view and scan. Tapping anywhere on the
+// dark backdrop (or the ✕) closes it.
+function showQrOverlay(id) {
+  const item = (DB.paymentInfo||[]).find(x=>x.id===id);
+  if(!item || !item.qrImage) return;
+  let overlay = document.getElementById('qrOverlay');
+  if(!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'qrOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(20,16,12,.78);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(2px)';
+    overlay.onclick = (e) => { if(e.target === overlay) closeQrOverlay(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="position:relative;max-width:420px;width:100%;background:var(--surface);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow-lg)">
+      <button onclick="closeQrOverlay()" title="Close" style="position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text-mid);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.85rem">✕</button>
+      ${item.label?`<div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text);text-align:center;margin-bottom:4px">${item.label}</div>`:''}
+      ${item.bank?`<div style="font-size:.74rem;color:var(--text-light);text-align:center;margin-bottom:14px">${item.bank}</div>`:''}
+      <img src="${item.qrImage}" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light);display:block">
+    </div>`;
+  overlay.style.display = 'flex';
 }
+
+function closeQrOverlay() {
+  const overlay = document.getElementById('qrOverlay');
+  if(overlay) overlay.style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+  if(e.key === 'Escape') {
+    const overlay = document.getElementById('qrOverlay');
+    if(overlay && overlay.style.display !== 'none') closeQrOverlay();
+  }
+});
 
 function openPaymentInfoModal(id) {
   if(!DB.paymentInfo) DB.paymentInfo=[];
