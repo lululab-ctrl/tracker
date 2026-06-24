@@ -3100,15 +3100,16 @@ function renderBudget(c) {
   const totalIncome     = totalRegular + totalFreelance;
   // Recurring always counts (monthly fixed bills)
   const totalRecurr = DB.budgetBills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
-  // Variable expenses filtered to selected month
+  // Variable expenses filtered to selected month — receivables are tracked
+  // separately below and are NOT included here.
   const varForMonth = DB.budgetVarExp.filter(e=>(e.date||'').slice(0,7)===budgetMonth);
-  // Unpaid receivables count as a variable expense in the month they were lent —
-  // money that left your pocket and hasn't come back yet. Paid-back receivables
-  // are excluded since the cash has already returned to you.
+  const totalVar = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  // Receivables: money lent out that hasn't been paid back yet. This is its
+  // own line in Debits, separate from Variable Expenses — lending money is a
+  // distinct kind of outflow (you expect it back) from a true expense.
   if(!DB.budgetReceivables) DB.budgetReceivables=[];
   const unpaidReceivablesForMonth = DB.budgetReceivables.filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth);
-  const totalVar = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0)
-                  + unpaidReceivablesForMonth.reduce((s,r)=>s+parseFloat(r.amount||0),0);
+  const totalReceivablesOut = unpaidReceivablesForMonth.reduce((s,r)=>s+parseFloat(r.amount||0),0);
   // Savings: lifetime balance (all deposits minus all withdrawals, ever).
   // Deposits move cash into savings (still yours, doesn't reduce net worth).
   // Withdrawals move cash OUT of savings back into spendable cash for that month.
@@ -3149,11 +3150,15 @@ function renderBudget(c) {
       const withdrawals = (DB.budgetSavings||[])
         .filter(g=>(g.date||'').slice(0,7)===cur && parseFloat(g.amount||0) < 0)
         .reduce((s,g)=>s+Math.abs(parseFloat(g.amount||0)),0);
-      // Net for this month: what's left after paying everything, plus any
-      // savings withdrawn back into spendable cash. Deposits are intentionally
-      // excluded — putting money into savings doesn't reduce your net worth,
-      // it just moves cash into a different bucket.
-      const net = inc - rec - varExp + withdrawals;
+      const receivablesOut = (DB.budgetReceivables||[])
+        .filter(r=>!r.paid && (r.date||'').slice(0,7)===cur)
+        .reduce((s,r)=>s+parseFloat(r.amount||0),0);
+      // Net for this month: what's left after paying everything and lending
+      // out any receivables, plus any savings withdrawn back into spendable
+      // cash. Savings deposits are intentionally excluded — putting money
+      // into savings doesn't reduce your net worth, it just moves cash into
+      // a different bucket.
+      const net = inc - rec - varExp - receivablesOut + withdrawals;
       carry += net;
       // Advance one month
       const [y,m] = cur.split('-').map(Number);
@@ -3167,7 +3172,7 @@ function renderBudget(c) {
   // Current month then adds its own fresh income on top
   const carryover = computeCarryover(budgetMonth);
 
-  const totalOut    = totalRecurr + totalVar;
+  const totalOut    = totalRecurr + totalVar + totalReceivablesOut;
   const remaining   = totalIncome + carryover - totalOut + withdrawalsThisMonth;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3252,6 +3257,10 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Variable Expenses</span><span style="font-weight:600">₱${fmt(totalVar)}</span>
         </div>
+        ${totalReceivablesOut>0?`
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Receivables <span style="font-size:.65rem;color:var(--text-light)">(lent out)</span></span><span style="font-weight:600">₱${fmt(totalReceivablesOut)}</span>
+        </div>`:''}
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--red)">
           <span>Total Out</span><span>₱${fmt(totalOut)}</span>
         </div>
@@ -3459,20 +3468,12 @@ function fillSavingsList() {
   const hidden  = sorted.slice(5);
 
   function savCard(g) {
-    let dateLabel = g.date||'';
-    try {
-      if(g.date) {
-        const d = new Date(g.date+'T12:00:00');
-        dateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-      }
-    } catch(e){}
     const isWithdraw = parseFloat(g.amount||0) < 0;
     return `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:100px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;flex-direction:column;min-height:80px">
       <div style="flex:1;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${g.notes||(isWithdraw?'Withdrawal':'Savings')}</div>
-          <div style="font-size:.68rem;color:var(--text-light);margin-top:1px">${dateLabel}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--font-display);font-size:1.15rem;color:${isWithdraw?'var(--red)':'var(--green)'}">${isWithdraw?'−':'+'}₱${fmt(Math.abs(g.amount))}</div>
