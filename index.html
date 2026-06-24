@@ -3109,16 +3109,12 @@ function renderBudget(c) {
   const unpaidReceivablesForMonth = DB.budgetReceivables.filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth);
   const totalVar = varForMonth.reduce((s,e)=>s+parseFloat(e.amount||0),0)
                   + unpaidReceivablesForMonth.reduce((s,r)=>s+parseFloat(r.amount||0),0);
-  // Savings: lifetime balance (all deposits minus all withdrawals, ever).
-  // Deposits move cash into savings (still yours, doesn't reduce net worth).
-  // Withdrawals move cash OUT of savings back into spendable cash for that month.
+  // Savings: lifetime balance (all deposits minus all withdrawals, ever) +
+  // this month's net change (for the Debits "set aside" line and carryover math)
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const savingsLifetimeBalance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
   const savingsForMonth = DB.budgetSavings.filter(g=>(g.date||'').slice(0,7)===budgetMonth);
-  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0); // net change this month (can be negative on withdrawal)
-  // Withdrawals this month (negative entries) become spendable cash again
-  const withdrawalsThisMonth = savingsForMonth.filter(g=>parseFloat(g.amount||0) < 0)
-    .reduce((s,g)=>s+Math.abs(parseFloat(g.amount||0)),0);
+  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0); // this month's net change (can be negative on withdrawal)
 
   // ── Carryover: net surplus/deficit from all prior months ──
   // Only carry what's LEFT after income - recurring - variable each month.
@@ -3133,7 +3129,7 @@ function renderBudget(c) {
   const earliestMonth = allTxMonths[0] || null;
 
   // Compute cumulative net from earliestMonth up to (not including) targetYM
-  // Net per month = income - recurring - varExpenses + withdrawals from savings that month
+  // Net per month = income - recurring - varExpenses - (this month's savings change)
   // Carryover into targetYM is the running balance of all prior months
   function computeCarryover(targetYM) {
     if(!earliestMonth || earliestMonth >= targetYM) return 0;
@@ -3146,14 +3142,11 @@ function renderBudget(c) {
       const varExp = DB.budgetVarExp
         .filter(e=>(e.date||'').slice(0,7)===cur)
         .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-      const withdrawals = (DB.budgetSavings||[])
-        .filter(g=>(g.date||'').slice(0,7)===cur && parseFloat(g.amount||0) < 0)
-        .reduce((s,g)=>s+Math.abs(parseFloat(g.amount||0)),0);
-      // Net for this month: what's left after paying everything, plus any
-      // savings withdrawn back into spendable cash. Deposits are intentionally
-      // excluded — putting money into savings doesn't reduce your net worth,
-      // it just moves cash into a different bucket.
-      const net = inc - rec - varExp + withdrawals;
+      const savChange = (DB.budgetSavings||[])
+        .filter(g=>(g.date||'').slice(0,7)===cur)
+        .reduce((s,g)=>s+parseFloat(g.amount||0),0);
+      // Net for this month: what's left after paying everything + this month's savings change
+      const net = inc - rec - varExp - savChange;
       carry += net;
       // Advance one month
       const [y,m] = cur.split('-').map(Number);
@@ -3167,8 +3160,8 @@ function renderBudget(c) {
   // Current month then adds its own fresh income on top
   const carryover = computeCarryover(budgetMonth);
 
-  const totalOut    = totalRecurr + totalVar;
-  const remaining   = totalIncome + carryover - totalOut + withdrawalsThisMonth;
+  const totalOut    = totalRecurr + totalVar + totalSaved;
+  const remaining   = totalIncome + carryover - totalOut;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtSigned = n => (n>=0?'+':'')+'₱'+Math.abs(n).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3236,12 +3229,8 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Savings Added <span style="font-size:.65rem;color:var(--text-light)">(balance)</span></span><span style="font-weight:600">₱${fmt(savingsLifetimeBalance)}</span>
         </div>
-        ${withdrawalsThisMonth>0?`
-        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
-          <span>Withdrawn from Savings <span style="font-size:.65rem;color:var(--text-light)">this month</span></span><span style="font-weight:600">₱${fmt(withdrawalsThisMonth)}</span>
-        </div>`:''}
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--green)">
-          <span>Total In</span><span>₱${fmt(totalIncome+withdrawalsThisMonth+(carryover>0?carryover:0))}</span>
+          <span>Total In</span><span>₱${fmt(totalIncome+savingsLifetimeBalance+(carryover>0?carryover:0))}</span>
         </div>
       </div>
       <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 14px">
@@ -3252,13 +3241,16 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Variable Expenses</span><span style="font-weight:600">₱${fmt(totalVar)}</span>
         </div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
+          <span>Savings (set aside) <span style="font-size:.65rem;color:var(--text-light)">this month</span></span><span style="font-weight:600">₱${fmt(totalSaved)}</span>
+        </div>
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--red)">
           <span>Total Out</span><span>₱${fmt(totalOut)}</span>
         </div>
       </div>
     </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance this month (Income + Carryover − Expenses)</span>
+      <span style="font-size:.78rem;color:var(--text-mid)">Net Balance this month (Income + Carryover − Expenses − Savings)</span>
       <span style="font-family:var(--font-display);font-size:1.1rem;color:${remaining>=0?'var(--green)':'var(--red)'};font-weight:600">
         ${remaining>=0?'+':''}₱${remaining.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}
       </span>
