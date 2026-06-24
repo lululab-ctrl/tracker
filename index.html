@@ -4487,7 +4487,7 @@ if(cloudEnabled) {
 </html>
 
 <!-- FLOATING CALCULATOR BUBBLE -->
-<div id="calcBubble" onclick="toggleCalc()" title="Calculator" style="
+<div id="calcBubble" title="Calculator" style="
   position:fixed;bottom:max(26px, calc(10px + env(safe-area-inset-bottom)));right:26px;z-index:8000;
   width:46px;height:46px;border-radius:50%;
   background:rgba(255,255,255,0.72);
@@ -4495,7 +4495,7 @@ if(cloudEnabled) {
   border:1.5px solid rgba(184,88,112,0.18);
   box-shadow:0 2px 12px rgba(60,40,20,0.12);
   display:flex;align-items:center;justify-content:center;
-  cursor:pointer;transition:all .18s;user-select:none;">
+  cursor:grab;transition:background .18s,border-color .18s;user-select:none;touch-action:none;">
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="2" y="2" width="16" height="16" rx="3" stroke="#B85870" stroke-width="1.4"/>
     <rect x="4.5" y="4.5" width="4" height="2.5" rx=".8" fill="#B85870" opacity=".7"/>
@@ -4533,12 +4533,114 @@ if(cloudEnabled) {
   var phpRate = null;
   var activeTab = 'calc';
 
+  // ── Drag-to-move for the bubble ──
+  // The bubble defaults to bottom-right (set via CSS bottom/right). Once the
+  // user drags it, we switch to explicit top/left positioning so it can be
+  // placed anywhere on screen. A small movement threshold distinguishes a
+  // genuine drag from a simple tap (which should still open/close the panel).
+  (function initBubbleDrag(){
+    var bubble = document.getElementById('calcBubble');
+    if(!bubble) return;
+    var dragging = false, moved = false;
+    var startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    var DRAG_THRESHOLD = 6; // px
+
+    function getPoint(e) {
+      if(e.touches && e.touches.length) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      return {x:e.clientX, y:e.clientY};
+    }
+
+    function onDown(e) {
+      var pt = getPoint(e);
+      var rect = bubble.getBoundingClientRect();
+      startX = pt.x; startY = pt.y;
+      startLeft = rect.left; startTop = rect.top;
+      dragging = true; moved = false;
+      bubble.style.cursor = 'grabbing';
+      // Switch from bottom/right anchoring to explicit left/top so the
+      // bubble can be freely positioned, while keeping it visually in place.
+      bubble.style.left = rect.left + 'px';
+      bubble.style.top = rect.top + 'px';
+      bubble.style.right = 'auto';
+      bubble.style.bottom = 'auto';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, {passive:false});
+      document.addEventListener('touchend', onUp);
+    }
+
+    function onMove(e) {
+      if(!dragging) return;
+      var pt = getPoint(e);
+      var dx = pt.x - startX, dy = pt.y - startY;
+      if(Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) moved = true;
+      if(!moved) return;
+      e.preventDefault();
+      var w = bubble.offsetWidth, h = bubble.offsetHeight;
+      var newLeft = Math.min(Math.max(0, startLeft + dx), window.innerWidth - w);
+      var newTop  = Math.min(Math.max(0, startTop + dy), window.innerHeight - h);
+      bubble.style.left = newLeft + 'px';
+      bubble.style.top = newTop + 'px';
+      // Keep the calculator panel anchored to the bubble while dragging, if open.
+      repositionPanelNearBubble();
+    }
+
+    function onUp() {
+      dragging = false;
+      bubble.style.cursor = 'grab';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      if(!moved) {
+        // Treat as a simple tap — open/close the calculator.
+        toggleCalc();
+      } else {
+        repositionPanelNearBubble();
+      }
+    }
+
+    bubble.addEventListener('mousedown', onDown);
+    bubble.addEventListener('touchstart', onDown, {passive:true});
+  })();
+
+  // Positions the calculator panel directly above/below the bubble's current
+  // location, flipping to whichever side fits on screen.
+  function repositionPanelNearBubble() {
+    var panel = document.getElementById('calcPanel');
+    var bubble = document.getElementById('calcBubble');
+    if(!panel || !bubble || panel.style.display === 'none') return;
+    var rect = bubble.getBoundingClientRect();
+    var panelW = panel.offsetWidth || 268;
+    var panelH = panel.offsetHeight || 360;
+    var margin = 10;
+
+    var left = rect.left + rect.width/2 - panelW/2;
+    left = Math.min(Math.max(margin, left), window.innerWidth - panelW - margin);
+
+    var top;
+    var spaceAbove = rect.top;
+    var spaceBelow = window.innerHeight - rect.bottom;
+    if(spaceBelow >= panelH + margin || spaceBelow >= spaceAbove) {
+      top = rect.bottom + margin;
+    } else {
+      top = rect.top - panelH - margin;
+    }
+    top = Math.min(Math.max(margin, top), window.innerHeight - panelH - margin);
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  }
+
   function toggleCalc() {
     var p = document.getElementById('calcPanel');
     var b = document.getElementById('calcBubble');
     if(p.style.display === 'none') {
       buildPanel();
       p.style.display = 'block';
+      repositionPanelNearBubble();
       b.style.background = 'rgba(184,88,112,0.12)';
       b.style.borderColor = 'rgba(184,88,112,0.4)';
       fetchRate();
