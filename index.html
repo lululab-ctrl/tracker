@@ -3586,6 +3586,7 @@ function fillRecurringList() {
             ${b.category?`<span class="chip">${b.category}</span>`:''}
             <span style="font-size:.65rem;color:var(--text-light)">${b.frequency||'Monthly'}</span>
             ${b.dueDay?`<span style="font-size:.65rem;color:var(--text-light)">· Due day ${b.dueDay}</span>`:''}
+            ${b.notes?`<span style="font-size:.65rem;color:var(--text-light);font-style:italic">· ${b.notes}</span>`:''}
             ${b.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${b.sharedWith}</span>`:''}
           </div>
         </div>
@@ -3594,7 +3595,6 @@ function fillRecurringList() {
             ${b.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${b.splitPeople} of ₱${fmt(b.totalAmount||b.amount)}</div>`:''}
           </div>
       </div>
-      ${b.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${b.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
         ${b.paid
           ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleBillPaid('${b.id}')">✓ Paid</span>`
@@ -3651,6 +3651,7 @@ function fillVarExpList() {
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${e.category?`<span class="chip">${e.category}</span>`:''}
             ${e.date?`<span style="font-size:.65rem;color:var(--text-light)">${e.date}</span>`:''}
+            ${e.notes?`<span style="font-size:.65rem;color:var(--text-light);font-style:italic">· ${e.notes}</span>`:''}
             ${e.sharedWith?`<span style="font-size:.65rem;background:var(--purple-bg);color:var(--purple);padding:2px 6px;border-radius:8px">👥 Split with ${e.sharedWith}</span>`:''}
           </div>
         </div>
@@ -3659,7 +3660,6 @@ function fillVarExpList() {
             ${e.splitPeople>1?`<div style="font-size:.65rem;color:var(--text-light)">÷${e.splitPeople} of ₱${fmt(e.totalAmount||e.amount)}</div>`:''}
           </div>
       </div>
-      ${e.notes?`<div style="font-size:.72rem;color:var(--text-light);margin-top:6px;font-style:italic">${e.notes}</div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
         ${e.paid
           ?`<span style="font-size:.65rem;background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer" onclick="toggleVarPaid('${e.id}')">✓ Paid</span>`
