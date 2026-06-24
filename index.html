@@ -3322,35 +3322,36 @@ function renderBudget(c) {
 
   </div>
 
-  <!-- RECEIVABLES — money owed to me -->
-  <div style="margin-top:22px">
-    <div class="sec-head" style="flex-wrap:wrap;gap:6px">
-      <div>
-        <div class="sec-title">🤝 Receivables</div>
-        <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Money lent out — track who owes you and when</div>
+  <!-- RECEIVABLES + PAYMENT INFO — side by side -->
+  <div class="grid-2" style="align-items:start;margin-top:22px">
+    <div>
+      <div class="sec-head" style="flex-wrap:wrap;gap:6px">
+        <div>
+          <div class="sec-title">🤝 Receivables</div>
+          <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Money lent out — track who owes you</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <select class="form-select" id="recvFilter" style="width:110px;font-size:.72rem" onchange="fillReceivablesList()">
+            <option value="">All</option>
+            <option value="paid">Paid ✓</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openReceivableModal()">+ Add</button>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-        <select class="form-select" id="recvFilter" style="width:110px;font-size:.72rem" onchange="fillReceivablesList()">
-          <option value="">All</option>
-          <option value="paid">Paid ✓</option>
-          <option value="unpaid">Unpaid</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="openReceivableModal()">+ Add</button>
-      </div>
+      <div id="receivablesList"></div>
     </div>
-    <div id="receivablesList"></div>
-  </div>
 
-  <!-- PAYMENT INFO — account numbers & QR codes for paying bills -->
-  <div style="margin-top:22px">
-    <div class="sec-head">
-      <div>
-        <div class="sec-title">💳 Payment Info</div>
-        <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Saved account numbers & QR codes — tap to copy</div>
+    <div>
+      <div class="sec-head">
+        <div>
+          <div class="sec-title">💳 Payment Info</div>
+          <div style="font-size:.7rem;color:var(--text-light);margin-top:2px">Saved accounts & QR codes — tap to copy</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openPaymentInfoModal()">+ Add</button>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openPaymentInfoModal()">+ Add</button>
+      <div id="paymentInfoList"></div>
     </div>
-    <div id="paymentInfoList"></div>
   </div>`;
 
   fillIncomeList();
@@ -3374,8 +3375,8 @@ function fillIncomeList() {
     return;
   }
   const total = items.reduce((s,i)=>s+parseFloat(i.amount||0),0);
-  const visible = items.slice(0,3);
-  const hidden  = items.slice(3);
+  const visible = items.slice(0,5);
+  const hidden  = items.slice(5);
 
   const schedLabel = s => ({monthly:'Monthly',split:'Bi-monthly',biweekly:'Every 2 weeks',weekly:'Weekly'}[s||'monthly']);
 
@@ -3435,8 +3436,8 @@ function fillSavingsList() {
     return;
   }
   const total = sorted.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  const visible = sorted.slice(0,3);
-  const hidden  = sorted.slice(3);
+  const visible = sorted.slice(0,5);
+  const hidden  = sorted.slice(5);
 
   function savCard(g) {
     let dateLabel = g.date||'';
@@ -3526,8 +3527,8 @@ function fillRecurringList() {
     return;
   }
   const total = bills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
-  const recurVisible = bills.slice(0,10);
-  const recurHidden  = bills.slice(10);
+  const recurVisible = bills.slice(0,5);
+  const recurHidden  = bills.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${bills.length} item${bills.length!==1?'s':''}</span>
@@ -3592,8 +3593,8 @@ function fillVarExpList() {
     return;
   }
   const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const varVisible = sorted.slice(0,10);
-  const varHidden  = sorted.slice(10);
+  const varVisible = sorted.slice(0,5);
+  const varHidden  = sorted.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
@@ -3657,8 +3658,8 @@ function fillReceivablesList() {
     return;
   }
   const totalOwed = items.filter(r=>!r.paid).reduce((s,r)=>s+parseFloat(r.amount||0),0);
-  const visible = items.slice(0,10);
-  const hidden  = items.slice(10);
+  const visible = items.slice(0,5);
+  const hidden  = items.slice(5);
 
   function recvCard(r) {
     let dateLabel = r.date||'';
@@ -3764,13 +3765,12 @@ function fillPaymentInfoList() {
     el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">💳</div><p style="font-size:.8rem">No payment info saved yet.<br>Add account numbers or QR codes for quick access.</p></div>`;
     return;
   }
-  el.innerHTML = `<div class="grid-2" id="paymentInfoGrid" style="gap:12px"></div>`;
-  const grid = document.getElementById('paymentInfoGrid');
-  DB.paymentInfo.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'card card-sm';
-    card.style.borderLeft = '3px solid var(--blue)';
-    card.innerHTML = `
+  const visible = DB.paymentInfo.slice(0,5);
+  const hidden  = DB.paymentInfo.slice(5);
+
+  function piCard(p) {
+    return `
+    <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--blue)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${p.label||'Untitled'}</div>
@@ -3791,9 +3791,23 @@ function fillPaymentInfoList() {
         <img src="${p.qrImage}" style="max-width:160px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
       </div>`:''}
       ${p.notes?`<div style="font-size:.72rem;color:var(--text-light);font-style:italic">${p.notes}</div>`:''}
-    `;
-    grid.appendChild(card);
-  });
+    </div>`;
+  }
+
+  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">${DB.paymentInfo.length} saved</div>`;
+  visible.forEach(p=>{ el.innerHTML += piCard(p); });
+  if(hidden.length) {
+    const hd = document.createElement('div');
+    hd.id = 'paymentInfoExtra'; hd.style.display = 'none';
+    hidden.forEach(p=>{ hd.innerHTML += piCard(p); });
+    el.appendChild(hd);
+    const tb = document.createElement('button');
+    tb.className = 'btn btn-ghost btn-sm';
+    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
+    tb.textContent = `Show ${hidden.length} more`;
+    tb.onclick = function(){ const d=document.getElementById('paymentInfoExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
+    el.appendChild(tb);
+  }
 }
 
 function openPaymentInfoModal(id) {
