@@ -3110,16 +3110,12 @@ function renderBudget(c) {
   if(!DB.budgetReceivables) DB.budgetReceivables=[];
   const unpaidReceivablesForMonth = DB.budgetReceivables.filter(r=>!r.paid && (r.date||'').slice(0,7)===budgetMonth);
   const totalReceivablesOut = unpaidReceivablesForMonth.reduce((s,r)=>s+parseFloat(r.amount||0),0);
-  // Savings: lifetime balance (all deposits minus all withdrawals, ever).
-  // Deposits move cash into savings (still yours, doesn't reduce net worth).
-  // Withdrawals move cash OUT of savings back into spendable cash for that month.
+  // Savings: a single running lifetime balance — deposits add, withdrawals
+  // subtract. This is the ONLY place savings activity affects the budget;
+  // it never appears as a separate line in Credits or Debits, and never
+  // flows into spendable Net Balance math.
   if(!DB.budgetSavings) DB.budgetSavings=[];
   const savingsLifetimeBalance = DB.budgetSavings.reduce((s,g)=>s+parseFloat(g.amount||0),0);
-  const savingsForMonth = DB.budgetSavings.filter(g=>(g.date||'').slice(0,7)===budgetMonth);
-  const totalSaved = savingsForMonth.reduce((s,g)=>s+parseFloat(g.amount||0),0); // net change this month (can be negative on withdrawal)
-  // Withdrawals this month (negative entries) become spendable cash again
-  const withdrawalsThisMonth = savingsForMonth.filter(g=>parseFloat(g.amount||0) < 0)
-    .reduce((s,g)=>s+Math.abs(parseFloat(g.amount||0)),0);
 
   // ── Carryover: net surplus/deficit from all prior months ──
   // Only carry what's LEFT after income - recurring - variable each month.
@@ -3147,18 +3143,14 @@ function renderBudget(c) {
       const varExp = DB.budgetVarExp
         .filter(e=>(e.date||'').slice(0,7)===cur)
         .reduce((s,e)=>s+parseFloat(e.amount||0),0);
-      const withdrawals = (DB.budgetSavings||[])
-        .filter(g=>(g.date||'').slice(0,7)===cur && parseFloat(g.amount||0) < 0)
-        .reduce((s,g)=>s+Math.abs(parseFloat(g.amount||0)),0);
       const receivablesOut = (DB.budgetReceivables||[])
         .filter(r=>!r.paid && (r.date||'').slice(0,7)===cur)
         .reduce((s,r)=>s+parseFloat(r.amount||0),0);
       // Net for this month: what's left after paying everything and lending
-      // out any receivables, plus any savings withdrawn back into spendable
-      // cash. Savings deposits are intentionally excluded — putting money
-      // into savings doesn't reduce your net worth, it just moves cash into
-      // a different bucket.
-      const net = inc - rec - varExp - receivablesOut + withdrawals;
+      // out any receivables. Savings deposits AND withdrawals are intentionally
+      // excluded from this carryover math — savings activity only ever affects
+      // the "Savings Added" balance, never spendable cash flow elsewhere.
+      const net = inc - rec - varExp - receivablesOut;
       carry += net;
       // Advance one month
       const [y,m] = cur.split('-').map(Number);
@@ -3173,7 +3165,10 @@ function renderBudget(c) {
   const carryover = computeCarryover(budgetMonth);
 
   const totalOut    = totalRecurr + totalVar + totalReceivablesOut;
-  const remaining   = totalIncome + carryover - totalOut + withdrawalsThisMonth;
+  // Withdrawals from Savings are intentionally excluded from Net Balance —
+  // per design, a withdrawal only reduces "Savings Added" in Credits and
+  // does not flow back into spendable cash anywhere else.
+  const remaining   = totalIncome + carryover - totalOut;
   const remainingColor = remaining >= 0 ? 'var(--green)' : 'var(--red)';
   const fmt = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtSigned = n => (n>=0?'+':'')+'₱'+Math.abs(n).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3241,12 +3236,8 @@ function renderBudget(c) {
         <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
           <span>Savings Added <span style="font-size:.65rem;color:var(--text-light)">(balance)</span></span><span style="font-weight:600">₱${fmt(savingsLifetimeBalance)}</span>
         </div>
-        ${withdrawalsThisMonth>0?`
-        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text);margin-bottom:4px">
-          <span>Withdrawn from Savings <span style="font-size:.65rem;color:var(--text-light)">this month</span></span><span style="font-weight:600">₱${fmt(withdrawalsThisMonth)}</span>
-        </div>`:''}
         <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:var(--green)">
-          <span>Total In</span><span>₱${fmt(totalIncome+withdrawalsThisMonth+(carryover>0?carryover:0))}</span>
+          <span>Total In</span><span>₱${fmt(totalIncome+(carryover>0?carryover:0))}</span>
         </div>
       </div>
       <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 14px">
@@ -3485,7 +3476,7 @@ function fillSavingsList() {
   const logHtml = thisMonthEntries.length
     ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-light)">
         <div style="font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin-bottom:8px">This Month's Activity</div>
-        <div style="max-height:220px;overflow-y:auto;padding-right:4px">
+        <div style="max-height:117px;overflow-y:auto;padding-right:4px">
           ${thisMonthEntries.map(logRow).join('')}
         </div>
       </div>`
@@ -3561,13 +3552,12 @@ function fillRecurringList() {
     return;
   }
   const total = bills.reduce((s,b)=>s+parseFloat(b.amount||0),0);
-  const recurVisible = bills.slice(0,5);
-  const recurHidden  = bills.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${bills.length} item${bills.length!==1?'s':''}</span>
       <span style="font-weight:600;color:var(--blue)">Total: ₱${fmt(total)}/mo</span>
-    </div>`;
+    </div>
+    <div style="max-height:432px;overflow-y:auto;padding-right:4px" id="recurringScroll"></div>`;
   function recurCard(b){ return `
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--blue)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
@@ -3595,19 +3585,8 @@ function fillRecurringList() {
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetBills','${b.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
     </div>`; }
-  recurVisible.forEach(b=>{ el.innerHTML += recurCard(b); });
-  if(recurHidden.length) {
-    const hd = document.createElement('div');
-    hd.id = 'recurExtra'; hd.style.display = 'none';
-    recurHidden.forEach(b=>{ hd.innerHTML += recurCard(b); });
-    el.appendChild(hd);
-    const tb = document.createElement('button');
-    tb.className = 'btn btn-ghost btn-sm';
-    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    tb.textContent = `Show ${recurHidden.length} more`;
-    tb.onclick = function(){ const d=document.getElementById('recurExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${recurHidden.length} more`:'Show less'; };
-    el.appendChild(tb);
-  }
+  const scrollEl = document.getElementById('recurringScroll');
+  if(scrollEl) bills.forEach(b=>{ scrollEl.innerHTML += recurCard(b); });
 }
 
 function fillVarExpList() {
@@ -3627,13 +3606,12 @@ function fillVarExpList() {
     return;
   }
   const total = sorted.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const varVisible = sorted.slice(0,5);
-  const varHidden  = sorted.slice(5);
   el.innerHTML = `
     <div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
       <span>${sorted.length} entr${sorted.length!==1?'ies':'y'}</span>
       <span style="font-weight:600;color:var(--purple)">Total: ₱${fmt(total)}</span>
-    </div>`;
+    </div>
+    <div style="max-height:432px;overflow-y:auto;padding-right:4px" id="varExpScroll"></div>`;
   function varCard(e){ return `
     <div class="card card-sm" style="margin-bottom:8px;border-left:3px solid var(--purple)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
@@ -3660,19 +3638,8 @@ function fillVarExpList() {
         <button class="btn btn-danger btn-sm" onclick="delItem('budgetVarExp','${e.id}',()=>renderBudget(document.getElementById('content')))">✕</button>
       </div>
     </div>`; }
-  varVisible.forEach(e=>{ el.innerHTML += varCard(e); });
-  if(varHidden.length) {
-    const hd = document.createElement('div');
-    hd.id = 'varExpExtra'; hd.style.display = 'none';
-    varHidden.forEach(e=>{ hd.innerHTML += varCard(e); });
-    el.appendChild(hd);
-    const tb = document.createElement('button');
-    tb.className = 'btn btn-ghost btn-sm';
-    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    tb.textContent = `Show ${varHidden.length} more`;
-    tb.onclick = function(){ const d=document.getElementById('varExpExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${varHidden.length} more`:'Show less'; };
-    el.appendChild(tb);
-  }
+  const scrollEl = document.getElementById('varExpScroll');
+  if(scrollEl) sorted.forEach(e=>{ scrollEl.innerHTML += varCard(e); });
 }
 
 // ══════════════════════════════════════════════
@@ -3692,8 +3659,6 @@ function fillReceivablesList() {
     return;
   }
   const totalOwed = items.filter(r=>!r.paid).reduce((s,r)=>s+parseFloat(r.amount||0),0);
-  const visible = items.slice(0,5);
-  const hidden  = items.slice(5);
 
   function recvCard(r) {
     let dateLabel = r.date||'';
@@ -3726,20 +3691,10 @@ function fillReceivablesList() {
   el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px;display:flex;justify-content:space-between">
     <span>${items.length} entr${items.length!==1?'ies':'y'}</span>
     <span style="font-weight:600;color:var(--amber)">Outstanding: ₱${fmt(totalOwed)}</span>
-  </div>`;
-  visible.forEach(r=>{ el.innerHTML += recvCard(r); });
-  if(hidden.length) {
-    const hd = document.createElement('div');
-    hd.id = 'receivablesExtra'; hd.style.display = 'none';
-    hidden.forEach(r=>{ hd.innerHTML += recvCard(r); });
-    el.appendChild(hd);
-    const tb = document.createElement('button');
-    tb.className = 'btn btn-ghost btn-sm';
-    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    tb.textContent = `Show ${hidden.length} more`;
-    tb.onclick = function(){ const d=document.getElementById('receivablesExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
-    el.appendChild(tb);
-  }
+  </div>
+  <div style="max-height:480px;overflow-y:auto;padding-right:4px" id="receivablesScroll"></div>`;
+  const scrollEl = document.getElementById('receivablesScroll');
+  if(scrollEl) items.forEach(r=>{ scrollEl.innerHTML += recvCard(r); });
 }
 
 function openReceivableModal(id) {
@@ -3799,9 +3754,6 @@ function fillPaymentInfoList() {
     el.innerHTML=`<div class="empty" style="padding:24px 16px"><div class="empty-icon" style="font-size:1.6rem">💳</div><p style="font-size:.8rem">No payment info saved yet.<br>Add account numbers or QR codes for quick access.</p></div>`;
     return;
   }
-  const visible = DB.paymentInfo.slice(0,5);
-  const hidden  = DB.paymentInfo.slice(5);
-
   function piCard(p) {
     const hasAcct = p.accountName || p.accountNumber;
     return `
@@ -3829,20 +3781,10 @@ function fillPaymentInfoList() {
     </div>`;
   }
 
-  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">${DB.paymentInfo.length} saved</div>`;
-  visible.forEach(p=>{ el.innerHTML += piCard(p); });
-  if(hidden.length) {
-    const hd = document.createElement('div');
-    hd.id = 'paymentInfoExtra'; hd.style.display = 'none';
-    hidden.forEach(p=>{ hd.innerHTML += piCard(p); });
-    el.appendChild(hd);
-    const tb = document.createElement('button');
-    tb.className = 'btn btn-ghost btn-sm';
-    tb.style.cssText = 'width:100%;margin-top:4px;font-size:.7rem';
-    tb.textContent = `Show ${hidden.length} more`;
-    tb.onclick = function(){ const d=document.getElementById('paymentInfoExtra'),s=d.style.display!=='none'; d.style.display=s?'none':'block'; this.textContent=s?`Show ${hidden.length} more`:'Show less'; };
-    el.appendChild(tb);
-  }
+  el.innerHTML = `<div style="font-size:.72rem;color:var(--text-light);margin-bottom:10px">${DB.paymentInfo.length} saved</div>
+  <div style="max-height:480px;overflow-y:auto;padding-right:4px" id="paymentInfoScroll"></div>`;
+  const scrollEl = document.getElementById('paymentInfoScroll');
+  if(scrollEl) DB.paymentInfo.forEach(p=>{ scrollEl.innerHTML += piCard(p); });
 }
 
 function openPaymentInfoModal(id) {
