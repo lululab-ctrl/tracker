@@ -1984,7 +1984,7 @@ function fillDestPacking(packs, destId) {
           <select class="form-select" id="pc_${pl.id}" style="width:118px;font-size:.74rem">
             ${['General','Clothing','Toiletries','Hygiene','Gadgets','Documents','Medicines','Shoes','Accessories','Snacks','Other'].map(cat=>`<option>${cat}</option>`).join('')}
           </select>
-          <input class="form-input" id="pq_${pl.id}" type="number" min="1" value="1"
+          <input class="form-input" id="pq_${pl.id}" type="number" inputmode="decimal" min="1" value="1"
             style="width:54px;padding:7px 8px;font-size:.78rem;text-align:center">
           <button class="btn btn-primary btn-sm" onclick="addPackItem('${pl.id}','${destId}')">+ Add</button>
         </div>
@@ -2095,7 +2095,7 @@ function openDestModal(id) {
       <div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="f_dend" type="date" value="${d.endDate||''}"></div>
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Travelers</label><input class="form-input" id="f_dtv" type="number" min="1" value="${d.travelers||1}"></div>
+      <div class="form-group"><label class="form-label">Travelers</label><input class="form-input" id="f_dtv" type="number" inputmode="decimal" min="1" value="${d.travelers||1}"></div>
     </div>
     <div class="form-group"><label class="form-label">Itinerary & Notes</label><textarea class="form-textarea" id="f_dno" rows="5" placeholder="Day-by-day itinerary, tips, important info...">${d.notes||''}</textarea></div>
     <div class="form-group"><label class="form-label">Cover Photo</label>
@@ -2184,11 +2184,11 @@ function openBookingModal(id, destId) {
       <div class="fr2" style="margin-bottom:0">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Total Amount (₱)</label>
-          <input class="form-input" id="f_ba" type="number" step="0.01" placeholder="0.00" value="${b.totalAmount||b.amount||''}" oninput="calcBookingSplit()">
+          <input class="form-input" id="f_ba" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${b.totalAmount||b.amount||''}" oninput="calcBookingSplit()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Split Between # People</label>
-          <input class="form-input" id="f_bsplit" type="number" min="1" placeholder="1" value="${b.splitPeople||1}" oninput="calcBookingSplit()">
+          <input class="form-input" id="f_bsplit" type="number" inputmode="decimal" min="1" placeholder="1" value="${b.splitPeople||1}" oninput="calcBookingSplit()">
         </div>
       </div>
       <div id="bk_split_result" style="margin-top:10px;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);display:${(b.splitPeople&&b.splitPeople>1)?'flex':'none'};align-items:center;justify-content:space-between">
@@ -2322,11 +2322,11 @@ function openExpenseModal(destId, id) {
       <div class="fr2" style="margin-bottom:8px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Total Amount (₱)</label>
-          <input class="form-input" id="f_ea" type="number" step="0.01" placeholder="0.00" value="${totalAmt}" oninput="calcExpSplit()">
+          <input class="form-input" id="f_ea" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${totalAmt}" oninput="calcExpSplit()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Split Between # People</label>
-          <input class="form-input" id="f_esplit" type="number" min="1" placeholder="1" value="${splitPeople}" oninput="calcExpSplit()">
+          <input class="form-input" id="f_esplit" type="number" inputmode="decimal" min="1" placeholder="1" value="${splitPeople}" oninput="calcExpSplit()">
         </div>
       </div>
       <div class="form-group" style="margin-bottom:8px">
@@ -2462,7 +2462,7 @@ function openSmartPackModal(destId) {
           ${items.map(item=>`
             <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--radius-sm);padding:6px 10px">
               <span style="flex:1;font-size:.76rem;color:var(--text)">${item}</span>
-              <input type="number" min="0" value="0" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:3px 5px;font-size:.74rem;text-align:center;background:var(--surface)" data-item="${item}" data-cat="${cat}">
+              <input type="number" inputmode="decimal" min="0" value="0" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:3px 5px;font-size:.74rem;text-align:center;background:var(--surface)" data-item="${item}" data-cat="${cat}">
             </div>`).join('')}
         </div>
       </div>`).join('')}
@@ -2610,7 +2610,7 @@ function editPackItem(listId,idx,destId) {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Quantity</label>
-        <input class="form-input" id="f_eiq" type="number" min="1" value="${item.qty||1}">
+        <input class="form-input" id="f_eiq" type="number" inputmode="decimal" min="1" value="${item.qty||1}">
       </div>
     </div>
   `, () => {
@@ -2953,7 +2953,7 @@ function openLogModal(progId, dayNum) {
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_ldt" type="date" value="${td()}"></div>
     </div>
     <div class="fr2">
-      <div class="form-group"><label class="form-label">Duration (min)</label><input class="form-input" id="f_ldur" type="number" placeholder="45" value="45"></div>
+      <div class="form-group"><label class="form-label">Duration (min)</label><input class="form-input" id="f_ldur" type="number" inputmode="decimal" placeholder="45" value="45"></div>
       <div class="form-group"><label class="form-label">Feeling</label><select class="form-select" id="f_lm">
         <option value="great">Great 💪</option><option value="good" selected>Good</option><option value="okay">Okay</option><option value="tough">Tough</option>
       </select></div>
@@ -3003,9 +3003,9 @@ function openNutritionModal() {
     </div>
     <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="f_ndesc" placeholder="e.g. Grilled chicken with rice and greens"></div>
     <div class="fr3">
-      <div class="form-group"><label class="form-label">Calories</label><input class="form-input" id="f_ncal" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Protein (g)</label><input class="form-input" id="f_nprot" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Carbs (g)</label><input class="form-input" id="f_ncarb" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Calories</label><input class="form-input" id="f_ncal" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Protein (g)</label><input class="form-input" id="f_nprot" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Carbs (g)</label><input class="form-input" id="f_ncarb" type="number" inputmode="decimal" placeholder="0"></div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f_nno" rows="2"></textarea></div>
   `,()=>{ DB.nutrition.push({id:uid(),date:fv('f_nd'),meal:fv('f_nm'),description:fv('f_ndesc'),calories:fv('f_ncal'),protein:fv('f_nprot'),carbs:fv('f_ncarb'),notes:fv('f_nno')}); save();closeModal();renderNutrition(document.getElementById('content')); });
@@ -3513,12 +3513,11 @@ function openSavingsModal(id) {
   const isEditingWithdrawal = id && parseFloat(item.amount||0) < 0;
   openModal(id?(isEditingWithdrawal?'Edit Withdrawal':'Edit Savings Entry'):'Add to Savings', `
     <div class="form-group"><label class="form-label">Amount ${isEditingWithdrawal?'Withdrawn':'Saved'} (₱)</label>
-      <input class="form-input" id="f_samt" type="number" step="0.01" placeholder="0.00" value="${Math.abs(item.amount||'')||''}">
+      <input class="form-input" id="f_samt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${Math.abs(item.amount||'')||''}">
     </div>
     <div class="form-group"><label class="form-label">Notes <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
       <textarea class="form-textarea" id="f_snotes" rows="2" placeholder="e.g. From salary, bonus, savings challenge...">${item.notes||''}</textarea>
     </div>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_sdate" type="date" value="${item.date||td()}"></div>
   `, () => {
     const amt = Math.abs(parseFloat(fv('f_samt'))||0);
     if(!amt){ alert('Please enter an amount.'); return; }
@@ -3527,7 +3526,10 @@ function openSavingsModal(id) {
       id:id||uid(),
       amount:signedAmt,
       notes:fv('f_snotes'),
-      date: fv('f_sdate') || td()
+      // No date input from the user — this is a simple running log, not a
+      // dated transaction. We still stamp a timestamp internally so entries
+      // sort in the order they were added, but the user never sees or sets it.
+      date: item.date || td()
     };
     if(id) { const i=DB.budgetSavings.findIndex(x=>x.id===id); DB.budgetSavings[i]=obj; }
     else DB.budgetSavings.push(obj);
@@ -3542,12 +3544,11 @@ function openWithdrawSavingsModal() {
   openModal('Withdraw from Savings', `
     <p style="font-size:.78rem;color:var(--text-light);margin-bottom:14px;line-height:1.6">Current balance: <strong style="color:var(--green)">₱${fmt(balance)}</strong></p>
     <div class="form-group"><label class="form-label">Amount to Withdraw (₱)</label>
-      <input class="form-input" id="f_wamt" type="number" step="0.01" placeholder="0.00" max="${balance}">
+      <input class="form-input" id="f_wamt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" max="${balance}">
     </div>
     <div class="form-group"><label class="form-label">Reason <span style="font-size:.68rem;color:var(--text-light);font-weight:400">(optional)</span></label>
       <textarea class="form-textarea" id="f_wnotes" rows="2" placeholder="e.g. Emergency, planned purchase..."></textarea>
     </div>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f_wdate" type="date" value="${td()}"></div>
   `, () => {
     const amt = Math.abs(parseFloat(fv('f_wamt'))||0);
     if(!amt){ alert('Please enter an amount to withdraw.'); return; }
@@ -3556,7 +3557,9 @@ function openWithdrawSavingsModal() {
       id:uid(),
       amount:-amt,
       notes:fv('f_wnotes')||'Withdrawal',
-      date:fv('f_wdate')||td()
+      // Simple log entry — no user-facing date field, just stamped internally
+      // for ordering purposes.
+      date:td()
     });
     save(); closeModal(); renderBudget(document.getElementById('content'));
   }, false, 'Withdraw');
@@ -3770,7 +3773,7 @@ function openReceivableModal(id) {
     </div>
     <div class="fr2">
       <div class="form-group"><label class="form-label">Amount (₱)</label>
-        <input class="form-input" id="f_recvamt" type="number" step="0.01" placeholder="0.00" value="${item.amount||''}">
+        <input class="form-input" id="f_recvamt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.amount||''}">
       </div>
       <div class="form-group"><label class="form-label">Date Lent</label>
         <input class="form-input" id="f_recvdate" type="date" value="${item.date||td()}">
@@ -3987,8 +3990,13 @@ function openIncomeModal(id) {
 
     <!-- MONTHLY: single amount -->
     <div id="inc_monthly" style="display:${schedule==='monthly'?'block':'none'}">
-      <div class="form-group"><label class="form-label">Monthly Amount (₱)</label>
-        <input class="form-input" id="f_iamt" type="number" step="0.01" placeholder="0.00" value="${schedule==='monthly'?(item.amount||''):''}">
+      <div class="fr2">
+        <div class="form-group"><label class="form-label">Date</label>
+          <input class="form-input" id="f_imdate" type="date" value="${item.day1||td()}">
+        </div>
+        <div class="form-group"><label class="form-label">Monthly Amount (₱)</label>
+          <input class="form-input" id="f_iamt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${schedule==='monthly'?(item.amount||''):''}">
+        </div>
       </div>
     </div>
 
@@ -4002,7 +4010,7 @@ function openIncomeModal(id) {
         </div>
         <div class="form-group">
           <label class="form-label">Amount (₱)</label>
-          <input class="form-input" id="f_iamt1" type="number" step="0.01" placeholder="0.00" value="${item.amt1||''}">
+          <input class="form-input" id="f_iamt1" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.amt1||''}">
         </div>
       </div>
       <div id="split_total" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:.78rem;color:var(--text-mid);display:flex;justify-content:space-between;margin-top:4px">
@@ -4014,8 +4022,13 @@ function openIncomeModal(id) {
 
     <!-- BIWEEKLY / WEEKLY -->
     <div id="inc_period" style="display:${(schedule==='biweekly'||schedule==='weekly')?'block':'none'}">
-      <div class="form-group"><label class="form-label">Amount per ${schedule==='weekly'?'week':'2 weeks'} (₱)</label>
-        <input class="form-input" id="f_iamtp" type="number" step="0.01" placeholder="0.00" value="${(schedule==='biweekly'||schedule==='weekly')?(item.amtPer||''):''}">
+      <div class="fr2">
+        <div class="form-group"><label class="form-label">Date</label>
+          <input class="form-input" id="f_ipdate" type="date" value="${item.day1||td()}">
+        </div>
+        <div class="form-group"><label class="form-label">Amount per ${schedule==='weekly'?'week':'2 weeks'} (₱)</label>
+          <input class="form-input" id="f_iamtp" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${(schedule==='biweekly'||schedule==='weekly')?(item.amtPer||''):''}">
+        </div>
       </div>
     </div>
 
@@ -4032,12 +4045,17 @@ function openIncomeModal(id) {
     } else if(schedule === 'biweekly') {
       amtPer = parseFloat(fv('f_iamtp'))||0;
       amount = amtPer * 2.167;
+      day1 = fv('f_ipdate') || td();
     } else if(schedule === 'weekly') {
       amtPer = parseFloat(fv('f_iamtp'))||0;
       amount = amtPer * 4.333;
+      day1 = fv('f_ipdate') || td();
     } else {
+      // 'monthly' schedule
       amount = parseFloat(fv('f_iamt'))||0;
+      day1 = fv('f_imdate') || td();
     }
+    if(!amount){ alert('Please enter an amount.'); return; }
     const obj = {
       id:id||uid(), type:fv('f_itype'),
       paySchedule:schedule, amount:amount.toFixed(2),
@@ -4094,15 +4112,15 @@ function openLoanModal(id) {
         <input class="form-input" id="f_llender" placeholder="e.g. BDO, Metrobank" value="${item.lender||''}">
       </div>
       <div class="form-group"><label class="form-label">Monthly Payment ($)</label>
-        <input class="form-input" id="f_lpay" type="number" step="0.01" placeholder="0.00" value="${item.monthlyPayment||''}">
+        <input class="form-input" id="f_lpay" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.monthlyPayment||''}">
       </div>
     </div>
     <div class="fr2">
       <div class="form-group"><label class="form-label">Total Loan Amount ($)</label>
-        <input class="form-input" id="f_ltotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||''}">
+        <input class="form-input" id="f_ltotal" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.totalAmount||''}">
       </div>
       <div class="form-group"><label class="form-label">Amount Paid So Far ($)</label>
-        <input class="form-input" id="f_lpaid" type="number" step="0.01" placeholder="0.00" value="${item.paid||''}">
+        <input class="form-input" id="f_lpaid" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.paid||''}">
       </div>
     </div>
     <div class="fr2">
@@ -4144,18 +4162,18 @@ function openRecurringModal(id) {
       </div>
     </div>
     <div class="form-group"><label class="form-label">Due Day of Month</label>
-      <input class="form-input" id="f_rdueday" type="number" min="1" max="31" placeholder="e.g. 15" value="${item.dueDay||''}">
+      <input class="form-input" id="f_rdueday" type="number" inputmode="decimal" min="1" max="31" placeholder="e.g. 15" value="${item.dueDay||''}">
     </div>
     <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
       <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:8px">Cost Splitting</div>
       <div class="fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Total Amount (₱)</label>
-          <input class="form-input" id="f_rtotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcRecSplit()">
+          <input class="form-input" id="f_rtotal" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcRecSplit()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Split Between # People</label>
-          <input class="form-input" id="f_rsplit" type="number" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcRecSplit()">
+          <input class="form-input" id="f_rsplit" type="number" inputmode="decimal" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcRecSplit()">
         </div>
       </div>
       <div class="form-group" style="margin-bottom:6px">
@@ -4221,11 +4239,11 @@ function openVarExpModal(id) {
       <div class="fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Total Bill (₱)</label>
-          <input class="form-input" id="f_vtotal" type="number" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcVarSplit()">
+          <input class="form-input" id="f_vtotal" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${item.totalAmount||item.amount||''}" oninput="calcVarSplit()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Split Between # People</label>
-          <input class="form-input" id="f_vsplit" type="number" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcVarSplit()">
+          <input class="form-input" id="f_vsplit" type="number" inputmode="decimal" min="1" placeholder="1" value="${item.splitPeople||1}" oninput="calcVarSplit()">
         </div>
       </div>
       <div class="form-group" style="margin-bottom:6px">
@@ -4681,10 +4699,10 @@ if(cloudEnabled) {
     convPane.innerHTML =
       '<div id="cRateLabel" style="font-size:.68rem;color:var(--text-light);text-align:center;margin-bottom:12px">Fetching live rate...</div>' +
       '<div style="margin-bottom:10px"><div style="font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:5px">PHP (₱)</div>' +
-      '<input type="number" id="cPhp" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromPhp()"></div>' +
+      '<input type="number" inputmode="decimal" id="cPhp" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromPhp()"></div>' +
       '<div style="text-align:center;color:var(--text-light);margin-bottom:10px;font-size:1.1rem">⇅</div>' +
       '<div style="margin-bottom:10px"><div style="font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-mid);font-weight:500;margin-bottom:5px">USD ($)</div>' +
-      '<input type="number" id="cUsd" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromUsd()"></div>' +
+      '<input type="number" inputmode="decimal" id="cUsd" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-family:var(--font-body);font-size:.9rem;color:var(--text);background:var(--surface);outline:none" placeholder="0.00" oninput="window._convFromUsd()"></div>' +
       '<div id="cConvInfo" style="font-size:.65rem;color:var(--text-light);text-align:center"></div>';
 
     p.appendChild(convPane);
