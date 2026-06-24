@@ -3773,8 +3773,11 @@ function fillPaymentInfoList() {
         ${p.accountNumber?`<div class="copy-acct-field" data-acct-id="${p.id}" data-copy-field="accountNumber" style="padding:9px 12px;cursor:pointer;background:transparent;transition:background .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='transparent'"><div style="font-family:var(--font-display);font-size:.95rem;color:var(--accent);letter-spacing:.02em;word-break:break-all">${p.accountNumber}</div></div>`:''}
       </div>`:''}
       ${p.qrImage?`
-      <div style="text-align:center;margin-top:8px">
-        <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
+      <div style="margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="toggleQrVisibility('${p.id}')">See QR Code</button>
+        <div id="qrWrap-${p.id}" style="display:none;text-align:center;margin-top:8px">
+          <img src="${p.qrImage}" style="max-width:150px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--border-light)">
+        </div>
       </div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openPaymentInfoModal('${p.id}')">Edit</button>
@@ -3787,6 +3790,17 @@ function fillPaymentInfoList() {
   <div style="max-height:480px;overflow-y:auto;padding-right:4px" id="paymentInfoScroll"></div>`;
   const scrollEl = document.getElementById('paymentInfoScroll');
   if(scrollEl) DB.paymentInfo.forEach(p=>{ scrollEl.innerHTML += piCard(p); });
+}
+
+// Toggles the hidden QR code image for a payment info card. The QR stays
+// hidden by default and only renders once the user explicitly taps to see it.
+function toggleQrVisibility(id) {
+  const wrap = document.getElementById('qrWrap-' + id);
+  if(!wrap) return;
+  const btn = wrap.previousElementSibling;
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'block';
+  if(btn) btn.textContent = showing ? 'See QR Code' : 'Hide QR Code';
 }
 
 function openPaymentInfoModal(id) {
